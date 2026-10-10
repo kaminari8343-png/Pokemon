@@ -1,4 +1,4 @@
-html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,sans-serif;overscroll-behavior:none;background:#101820}
+html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',system-ui,sans-serif;overscroll-behavior:none;background:#101820}
 #map{position:absolute;inset:0;background:#d8c9a3}
 /* 現実の地図を古地図(羊皮紙)風に */
 .leaflet-tile-pane{filter:sepia(.7) saturate(1.25) hue-rotate(-12deg) contrast(.95) brightness(1.03)}
@@ -30,3 +30,28 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,sans-serif;
 #book-list li{padding:8px 0;border-bottom:1px solid #d9c9a0;font-size:14px}
 #book-list small{display:block;opacity:.65}
 .card button{width:100%;border:0;border-radius:10px;padding:10px;background:#5b4326;color:#fff;font:inherit}
+
+#tint{position:absolute;inset:0;z-index:450;pointer-events:none;box-shadow:inset 0 0 110px rgba(50,25,70,.55);transition:background 2s}
+#fx{position:absolute;inset:0;width:100%;height:100%;z-index:520;pointer-events:none}
+.stat{background:linear-gradient(160deg,rgba(52,38,92,.9),rgba(26,32,64,.9))}
+#lvl{position:absolute;z-index:1000;top:76px;left:10px;right:10px;display:flex;align-items:center;gap:8px;
+  background:rgba(24,30,44,.82);border:1px solid rgba(255,220,140,.35);border-radius:14px;padding:5px 12px;color:#ffe9a8;font-size:12px;font-weight:700}
+#lvl .bar{flex:1;height:8px;background:rgba(255,255,255,.18);border-radius:4px;overflow:hidden}
+#lvl .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd873,#ff9ecb);transition:width .6s}
+#lvl small{opacity:.8;font-weight:500}
+#hint{top:116px!important}
+#toast{top:156px!important}
+.me .bob{display:inline-block;animation:bob .7s ease-in-out infinite alternate}
+.me::after{content:"";display:block;width:22px;height:6px;margin:-2px auto 0;border-radius:50%;background:rgba(0,0,0,.28)}
+@keyframes bob{to{transform:translateY(-5px)}}
+.poi .e{animation:float 2.4s ease-in-out infinite alternate}
+.poi:not(.unk) .e{filter:drop-shadow(0 0 8px #ffd873)}
+@keyframes float{to{transform:translateY(-4px)}}
+.trail{filter:drop-shadow(0 0 5px #ffd873)}
+.pop{position:fixed;left:50%;top:36%;z-index:3000;pointer-events:none;text-align:center;transform:translateX(-50%);animation:popin 2.5s ease-out forwards}
+.pop .big{font-size:84px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));animation:zoom .6s cubic-bezier(.2,1.6,.4,1)}
+.pop .txt{display:inline-block;margin-top:6px;background:linear-gradient(90deg,#ffd873,#ff9ecb);color:#3a2a10;font-weight:700;padding:8px 16px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.pop .cf{position:absolute;left:50%;top:40px;font-size:22px;animation:burst 1.4s ease-out forwards}
+@keyframes zoom{from{transform:scale(0)}}
+@keyframes burst{to{transform:translate(var(--dx),var(--dy)) rotate(360deg);opacity:0}}
+@keyframes popin{0%,80%{opacity:1}100%{opacity:0}}
