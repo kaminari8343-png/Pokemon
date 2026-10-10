@@ -201,13 +201,21 @@ cv.addEventListener('pointerup', e => {
 });
 
 // ---- GPS ----
+// 位置が取れないとき(許可なし・屋内・未対応)は、東京駅からのプレビュー表示に切り替える
+function startPreview(reason) {
+  if (target) return;
+  debug = true; $('btn-debug').classList.add('on');
+  updatePosition(35.681236, 139.767125, 0);
+  $('status').textContent = reason + ' → プレビュー中(タップで移動)';
+}
 if (!navigator.geolocation) {
-  $('status').textContent = '位置情報に未対応 → 🧪をONに';
+  startPreview('位置情報に未対応');
 } else {
   navigator.geolocation.watchPosition(
     p => { if (!debug) updatePosition(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
-    err => { $('status').textContent = '位置情報を取得できません: ' + err.message + ' (🧪でテスト)'; },
+    err => startPreview('位置情報を取得できません(' + err.message + ')'),
     { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
   );
+  setTimeout(() => startPreview('位置情報の取得に時間がかかっています'), 8000);
 }
 updateHud();
