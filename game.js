@@ -267,7 +267,7 @@ function updatePosition(latlng, accuracy) {
       last = { p: latlng, t: now };
     }
   }
-  revealAround(latlng); maintainCoins(); pickCoins(accuracy); maybeFetchPois(); checkFound(); updateHint(); persist(); updateHud();
+  revealAround(latlng); maintainCoins(); pickCoins(accuracy); visitBuilt(); maybeFetchPois(); checkFound(); updateHint(); persist(); updateHud();
   $('status').textContent = debug ? 'テスト移動中(地図タップで移動)' : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`;
   drawFog();
   if (follow) map.panTo(latlng, { animate: true });
@@ -283,6 +283,7 @@ function randomNear(p, minR, maxR) {
   const r = minR + Math.random() * (maxR - minR), th = Math.random() * 2 * Math.PI;
   return { lat: p.lat + r * Math.cos(th) / 111320, lng: p.lng + r * Math.sin(th) / (111320 * Math.cos(p.lat * Math.PI / 180)) };
 }
+const MAGNET_LV = [1, 1.5, 2];
 function maintainCoins() {
   const now = Date.now();
   save.coins = save.coins.filter(c => {
@@ -290,8 +291,13 @@ function maintainCoins() {
     if (gone) removeCoinMarker(c.id);
     return !gone;
   });
-  while (save.coins.length < COIN_COUNT) {
-    const q = randomNear(me, 30, 220), r = Math.random();
+  const mg = save.built.filter(o => ITEM[o.t].magnet && map.distance([o.lat, o.lng], me) < 450);
+  const power = mg.reduce((s, o) => s + ITEM[o.t].magnet * MAGNET_LV[lvOf(o) - 1], 0);
+  const target = COIN_COUNT + Math.min(10, Math.floor(power * 2));
+  while (save.coins.length < target) {
+    const q = mg.length && Math.random() < Math.min(0.7, 0.25 * power)
+      ? randomNear(mg[Math.floor(Math.random() * mg.length)], 15, 110) : randomNear(me, 30, 220);
+    const r = Math.random();
     const c = { id: now + '-' + Math.random().toString(36).slice(2, 7), lat: q.lat, lng: q.lng,
       v: r < 0.05 ? 10 : r < 0.25 ? 3 : 1, exp: now + COIN_TTL * (0.5 + Math.random()) };
     save.coins.push(c); addCoinMarker(c);
@@ -301,7 +307,10 @@ function pickCoins(accuracy) {
   const range = COIN_RANGE + Math.min(accuracy || 0, 30);   // GPS誤差が大きいときはさらにゆるめる
   for (const c of [...save.coins]) {
     if (map.distance([c.lat, c.lng], me) > range) continue;
-    save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id); addGold(c.v);
+    save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id);
+    const luck = Math.min(0.9, save.built.filter(o => ITEM[o.t].lucky && map.distance([o.lat, o.lng], [c.lat, c.lng]) <= 200)
+      .reduce((s, o) => s + 0.15 * lvOf(o), 0));
+    if (Math.random() < luck) { floatText('🍀ご利益 2倍！'); addGold(c.v * 2); } else addGold(c.v);
   }
 }
 function floatText(text) {
@@ -316,36 +325,58 @@ function addGold(n) {
 }
 
 // ---- つくる ----
+// どのオブジェクトもコインを生産し、歩いて訪れると育ち、進化する
+const LV_RATE = [1, 2.2, 4.5];     // 進化ごとの収穫倍率
+const EVO_DAYS = [0, 3, 7];        // 進化に必要な「来た日数」(Lv1→2は3日、Lv2→3は7日)
+const HARVEST_CAP_H = 8;           // 何時間分までためられるか
 const ITEMS = [
-  { id: 'flower', e: '🌸', name: '花畑', cost: 5, size: 26 }, { id: 'tree', e: '🌳', name: '木', cost: 10, size: 32 },
-  { id: 'bench', e: '🪑', name: 'ベンチ', cost: 15, size: 28 }, { id: 'lantern', e: '🏮', name: 'ちょうちん', cost: 20, size: 30 },
-  { id: 'tent', e: '⛺', name: 'テント', cost: 35, size: 34 }, { id: 'fountain', e: '⛲', name: '噴水', cost: 50, size: 38 },
-  { id: 'shrine', e: '⛩️', name: 'ちいさなほこら', cost: 60, size: 40 }, { id: 'house', e: '🏠', name: 'おうち', cost: 80, size: 40 },
-  { id: 'tower', e: '🗼', name: 'ひかりの塔', cost: 150, size: 46 }, { id: 'castle', e: '🏰', name: 'おしろ', cost: 300, size: 52 },
+  { id: 'flower', cost: 5, size: 26, rate: 1.5, role: '花が咲いて、コインが実る', chain: [['🌸', '花畑'], ['🌷', 'チューリップ畑'], ['🌻', 'ひまわり畑']] },
+  { id: 'tree', cost: 10, size: 32, rate: 3, role: '実をつけて、コインに変わる', chain: [['🌳', '木'], ['🌲', '大樹'], ['🎄', '聖なる樹']] },
+  { id: 'rest', cost: 15, size: 28, rate: 2, role: '休憩所。立ち寄るとコインがたまる', chain: [['🪑', 'ベンチ'], ['⛺', 'テント'], ['🏕️', 'キャンプ場']] },
+  { id: 'lantern', cost: 20, size: 30, rate: 1, magnet: 1, role: '灯りにコインが集まってくる', chain: [['🏮', 'ちょうちん'], ['🪔', 'ランプ'], ['🌟', 'ほしの灯']] },
+  { id: 'fountain', cost: 50, size: 38, rate: 5, role: '湧き出るコインをためる', chain: [['💧', '小さな池'], ['⛲', '噴水'], ['🧜', '人魚の泉']] },
+  { id: 'shrine', cost: 60, size: 40, rate: 2, lucky: 1, role: 'ご利益で、近くのコインが2倍になることがある', chain: [['⛩️', 'ちいさなほこら'], ['🦊', 'きつねの社'], ['🐉', 'りゅうの社']] },
+  { id: 'house', cost: 80, size: 40, rate: 8, role: '家賃がたまる', chain: [['🏠', 'おうち'], ['🏡', '庭つきの家'], ['🏘️', '小さな村']] },
+  { id: 'tower', cost: 150, size: 46, rate: 3, magnet: 2, role: '遠くからコインを呼び寄せる', chain: [['🗼', 'ひかりの塔'], ['🔭', '星見の塔'], ['🛸', '天空港']] },
+  { id: 'castle', cost: 300, size: 52, rate: 20, role: '税収がたっぷりたまる', chain: [['🏰', 'おしろ'], ['🏯', '大きなおしろ'], ['👑', '王国']] },
 ];
 const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+const lvOf = o => o.lv || 1;
+const face = o => ITEM[o.t].chain[lvOf(o) - 1];                 // [絵文字, 名前]
+const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1];
+const evoCost = o => ITEM[o.t].cost * (lvOf(o) === 1 ? 2 : 4);
+const accrued = o => Math.min(HARVEST_CAP_H, (Date.now() - o.last) / 3600e3) * rateOf(o);
 const BUILD_RANGE = 40, MAX_BUILT = 300;
 const builtMarkers = new Map();
 let placing = null, placeCircle = null;
+
 function builtIcon(o, fresh) {
-  const it = ITEM[o.t], s = it.size + 8;
-  return L.divIcon({ className: 'built' + (fresh ? ' new' : ''), html: `<span style="font-size:${it.size}px">${it.e}</span>`, iconSize: [s, s], iconAnchor: [s / 2, s / 2] });
+  const sz = ITEM[o.t].size + (lvOf(o) - 1) * 6, s = sz + 14;
+  return L.divIcon({
+    className: 'built' + (fresh ? ' new' : '') + (accrued(o) >= 8 ? ' ready' : ''),
+    html: `<span style="font-size:${sz}px">${face(o)[0]}</span><i>${'★'.repeat(lvOf(o) - 1 || 0)}</i>`,
+    iconSize: [s, s + 10], iconAnchor: [s / 2, s / 2]
+  });
 }
 function addBuiltMarker(o, fresh) {
   const m = L.marker([o.lat, o.lng], { icon: builtIcon(o, fresh), zIndexOffset: 200 }).addTo(map);
   m.on('click', () => openObj(o)); builtMarkers.set(o.id, m);
 }
+function refreshBuilt() { for (const o of save.built) { const m = builtMarkers.get(o.id); if (m) m.setIcon(builtIcon(o, false)); } }
+setInterval(refreshBuilt, 60000);
+
 function openBuildMenu() {
   $('build-gold').textContent = '🪙 ' + save.gold;
   $('build-list').innerHTML = ITEMS.map(i =>
-    `<button data-id="${i.id}" ${save.gold < i.cost ? 'disabled' : ''}><b>${i.e}</b>${i.name}<small>${i.cost}🪙</small></button>`).join('');
+    `<button data-id="${i.id}" ${save.gold < i.cost ? 'disabled' : ''}><b>${i.chain[0][0]}</b>${i.chain[0][1]}` +
+    `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><small>${i.chain.map(c => c[0]).join('→')}</small></button>`).join('');
   $('build-list').querySelectorAll('button').forEach(b => b.onclick = () => startPlacing(ITEM[b.dataset.id]));
   $('build').hidden = false;
 }
 function startPlacing(it) {
   if (!me) return toast('現在地を取得してからつくれます');
   placing = it; $('build').hidden = true;
-  $('place-text').textContent = `${it.e} ${it.name}(${it.cost}🪙)を置く場所をタップ — 円の中だけ置けます`;
+  $('place-text').textContent = `${it.chain[0][0]} ${it.chain[0][1]}(${it.cost}🪙)を置く場所をタップ — 円の中だけ置けます`;
   $('placebar').hidden = false;
   if (placeCircle) map.removeLayer(placeCircle);
   placeCircle = L.circle(me, { radius: BUILD_RANGE, color: '#ffd873', weight: 2, dashArray: '6 6', fillColor: '#ffd873', fillOpacity: 0.12, interactive: false }).addTo(map);
@@ -357,20 +388,61 @@ function placeAt(ll) {
   if (save.built.length >= MAX_BUILT) return toast('これ以上は置けません');
   if (save.gold < placing.cost) return toast('コインが足りません');
   const it = placing;
-  const o = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), t: it.id, lat: ll.lat, lng: ll.lng, d: todayStr() };
+  const o = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), t: it.id, lat: ll.lat, lng: ll.lng, d: todayStr(),
+    lv: 1, last: Date.now(), days: 1, lastDay: todayStr(), spent: it.cost };
   save.built.push(o); addBuiltMarker(o, true); addGold(-it.cost);
-  toast(`${it.e} ${it.name}をつくった！`); stopPlacing(); persist(); updateHud();
+  toast(`${face(o)[0]} ${face(o)[1]}をつくった！\n歩いて通うと育って、進化します`); stopPlacing(); persist(); updateHud();
+}
+
+// 近くに行くと「来た日数」が増え、たまったコインを収穫する
+function visitBuilt() {
+  let got = 0; const parts = [];
+  for (const o of save.built) {
+    if (map.distance([o.lat, o.lng], me) > COIN_RANGE) continue;
+    if (o.lastDay !== todayStr()) { o.lastDay = todayStr(); o.days++; parts.push(`${face(o)[0]}${o.days}日目`); }
+    const a = accrued(o);
+    if (a >= 1) { const n = Math.floor(a); o.last = Date.now() - (a - n) / rateOf(o) * 3600e3; got += n; parts.push(`${face(o)[0]}+${n}`); }
+  }
+  if (parts.length) { if (got) addGold(got); toast('🌾 ' + parts.join('  ')); refreshBuilt(); }
+}
+
+// 進化: 「来た日数」と「コイン」と「近くにいること」が必要
+function evolveCheck(o) {
+  const lv = lvOf(o);
+  if (lv >= 3) return { ok: false, why: '最高の姿です' };
+  if (o.days < EVO_DAYS[lv]) return { ok: false, why: `あと${EVO_DAYS[lv] - o.days}日、ここに来よう (来た日数 ${o.days}/${EVO_DAYS[lv]})` };
+  if (!me || map.distance([o.lat, o.lng], me) > COIN_RANGE) return { ok: false, why: '近くまで行くと進化できます' };
+  if (save.gold < evoCost(o)) return { ok: false, why: `コインが足りません (${evoCost(o)}🪙)` };
+  return { ok: true };
 }
 function openObj(o) {
   if (placing) return;
-  const it = ITEM[o.t], refund = Math.floor(it.cost / 2);
-  $('obj-title').textContent = `${it.e} ${it.name}`; $('obj-sub').textContent = `${o.d} につくった`;
+  const it = ITEM[o.t], lv = lvOf(o), refund = Math.floor(o.spent / 2);
+  $('obj-title').textContent = `${face(o)[0]} ${face(o)[1]} ${'★'.repeat(lv - 1)}`;
+  let html = `<div>${it.role}</div><div>収穫: 1時間に ${rateOf(o).toFixed(1)}🪙 (最大${HARVEST_CAP_H}時間分)<br>たまっているコイン: <b>${Math.floor(accrued(o))}🪙</b>` +
+    `<br>来た日数: ${o.days}日 ／ つくった日: ${o.d}</div>`;
+  if (it.magnet) html += `<div>🧲 近くにコインを呼ぶ力あり</div>`;
+  if (it.lucky) html += `<div>🍀 近くのコインが2倍になることがある</div>`;
+  if (lv < 3) html += `<div>進化先: ${it.chain[lv][0]} ${it.chain[lv][1]}</div>`;
+  $('obj-sub').innerHTML = html;
+  const ev = evolveCheck(o), eb = $('obj-evo');
+  eb.hidden = lv >= 3; eb.disabled = !ev.ok; eb.textContent = ev.ok ? `進化させる (${evoCost(o)}🪙)` : ev.why;
+  eb.onclick = () => {
+    if (!evolveCheck(o).ok) return;
+    const cost = evoCost(o); addGold(-cost); o.spent += cost; o.lv = lv + 1;
+    refreshBuilt(); celebrate(face(o)[0], `${face(o)[1]}に進化！`); persist(); updateHud(); $('obj').hidden = true;
+  };
   $('obj-del').textContent = `とりこわす (+${refund}🪙)`;
   $('obj-del').onclick = () => {
     const m = builtMarkers.get(o.id); if (m) map.removeLayer(m); builtMarkers.delete(o.id);
     save.built.splice(save.built.indexOf(o), 1); addGold(refund); persist(); updateHud(); $('obj').hidden = true;
   };
   $('obj').hidden = false;
+}
+// 以前の保存データを新しい形式へ
+for (const o of save.built) {
+  if (o.t === 'bench') o.t = 'rest'; else if (o.t === 'tent') { o.t = 'rest'; o.lv = 2; }
+  o.lv = o.lv || 1; o.last = o.last || Date.now(); o.days = o.days || 1; o.lastDay = o.lastDay || o.d; o.spent = o.spent || ITEM[o.t].cost;
 }
 $('btn-build').onclick = openBuildMenu;
 $('build-close').onclick = () => { $('build').hidden = true; };

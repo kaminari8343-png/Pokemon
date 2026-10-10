@@ -79,3 +79,12 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 #build-list button small{font-weight:500;opacity:.8}
 #build-list button:disabled{opacity:.4}
 .card button.danger{background:#b3402a;margin-bottom:8px}
+
+.built{text-align:center}
+.built i{display:block;font-style:normal;font-size:10px;line-height:1;color:#ffd873;text-shadow:0 1px 2px #000;margin-top:1px}
+.built.ready::after{content:"🪙";position:absolute;top:-10px;right:-4px;font-size:17px;animation:float 1s ease-in-out infinite alternate}
+#obj-sub{font-size:13px;opacity:1;line-height:1.6}
+#obj-sub div{margin-bottom:6px}
+#obj-evo{margin-bottom:8px;background:#2f7d4f}
+#obj-evo:disabled{background:#8a8a7a;opacity:.85}
+#build-list button small{font-size:11px}
