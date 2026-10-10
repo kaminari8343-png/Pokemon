@@ -267,14 +267,14 @@ function updatePosition(latlng, accuracy) {
       last = { p: latlng, t: now };
     }
   }
-  revealAround(latlng); maintainCoins(); pickCoins(); maybeFetchPois(); checkFound(); updateHint(); persist(); updateHud();
+  revealAround(latlng); maintainCoins(); pickCoins(accuracy); maybeFetchPois(); checkFound(); updateHint(); persist(); updateHud();
   $('status').textContent = debug ? 'テスト移動中(地図タップで移動)' : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`;
   drawFog();
   if (follow) map.panTo(latlng, { animate: true });
 }
 
 // ---- コイン(歩いて拾う) ----
-const COIN_RANGE = 18, COIN_COUNT = 14, COIN_TTL = 30 * 60e3;
+const COIN_RANGE = 35, COIN_COUNT = 14, COIN_TTL = 30 * 60e3;
 const coinMarkers = new Map();
 const coinIcon = c => L.divIcon({ className: 'coin', html: `<span>${c.v >= 10 ? '💎' : c.v >= 3 ? '💰' : '🪙'}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] });
 function addCoinMarker(c) { coinMarkers.set(c.id, L.marker([c.lat, c.lng], { icon: coinIcon(c), zIndexOffset: 500 }).addTo(map)); }
@@ -297,9 +297,10 @@ function maintainCoins() {
     save.coins.push(c); addCoinMarker(c);
   }
 }
-function pickCoins() {
+function pickCoins(accuracy) {
+  const range = COIN_RANGE + Math.min(accuracy || 0, 30);   // GPS誤差が大きいときは判定をゆるめる
   for (const c of [...save.coins]) {
-    if (map.distance([c.lat, c.lng], me) > COIN_RANGE) continue;
+    if (map.distance([c.lat, c.lng], me) > range) continue;
     save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id); addGold(c.v);
   }
 }
