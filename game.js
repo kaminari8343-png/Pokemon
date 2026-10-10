@@ -11,7 +11,8 @@ const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.k
 
 // ---- 保存データ ----
 const KEY = 'sanpo-quest';
-const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '' }, JSON.parse(localStorage.getItem(KEY) || '{}'));
+const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, coins: [], built: [] }, JSON.parse(localStorage.getItem(KEY) || '{}'));
+save.coins = save.coins.filter(c => c.exp > Date.now());
 const explored = new Set(save.cells);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
@@ -166,7 +167,7 @@ function checkFound() {
     if (save.found[p.id] || map.distance(p.latlng, me) > FOUND_RANGE) continue;
     save.found[p.id] = { name: p.name, e: p.e, k: p.k, date: todayStr() };
     p.marker.setIcon(poiIcon(p, true));
-    celebrate(p.e, `${p.k}「${p.name}」を発見！`); toast(flavor(p));
+    celebrate(p.e, `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙'); addGold(20);
   }
 }
 const DIRS = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
@@ -210,8 +211,8 @@ function updateLevel() {
   $('lvl-name').textContent = `Lv.${lv + 1} ${LEVELS[lv][1]}`;
   $('lvl-fill').style.width = (next ? (xp - LEVELS[lv][0]) / (next[0] - LEVELS[lv][0]) * 100 : 100) + '%';
   $('lvl-next').textContent = next ? `次まで${Math.ceil(next[0] - xp)}pt` : 'MAX';
-  if (lastLv !== null && lv > lastLv) celebrate('🎖️', `レベルアップ！ ${LEVELS[lv][1]}`);
-  lastLv = lv;
+  const up = lastLv !== null && lv > lastLv; lastLv = lv;
+  if (up) { celebrate('🎖️', `レベルアップ！ ${LEVELS[lv][1]}`); addGold(50); }
 }
 function updateTint() {
   const d = new Date(), h = d.getHours() + d.getMinutes() / 60;
@@ -247,7 +248,7 @@ function drawTrail() {
 function updatePosition(latlng, accuracy) {
   me = latlng;
   if (!meMarker) {
-    meMarker = L.marker(latlng, { icon: L.divIcon({ html: '<span class="bob">🧙</span>', className: 'me', iconSize: [30, 30] }), zIndexOffset: 1000 }).addTo(map);
+    meMarker = L.marker(latlng, { icon: L.divIcon({ html: '<span class="bob">🧙</span>', className: 'me', iconSize: [30, 30] }), zIndexOffset: 1000, interactive: false }).addTo(map);
     map.setView(latlng, 17);
   } else meMarker.setLatLng(latlng);
   const now = Date.now();
@@ -266,11 +267,118 @@ function updatePosition(latlng, accuracy) {
       last = { p: latlng, t: now };
     }
   }
-  revealAround(latlng); maybeFetchPois(); checkFound(); updateHint(); persist(); updateHud();
+  revealAround(latlng); maintainCoins(); pickCoins(); maybeFetchPois(); checkFound(); updateHint(); persist(); updateHud();
   $('status').textContent = debug ? 'テスト移動中(地図タップで移動)' : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`;
   drawFog();
   if (follow) map.panTo(latlng, { animate: true });
 }
+
+// ---- コイン(歩いて拾う) ----
+const COIN_RANGE = 18, COIN_COUNT = 14, COIN_TTL = 30 * 60e3;
+const coinMarkers = new Map();
+const coinIcon = c => L.divIcon({ className: 'coin', html: `<span>${c.v >= 10 ? '💎' : c.v >= 3 ? '💰' : '🪙'}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+function addCoinMarker(c) { coinMarkers.set(c.id, L.marker([c.lat, c.lng], { icon: coinIcon(c), zIndexOffset: 500 }).addTo(map)); }
+function removeCoinMarker(id) { const m = coinMarkers.get(id); if (m) { map.removeLayer(m); coinMarkers.delete(id); } }
+function randomNear(p, minR, maxR) {
+  const r = minR + Math.random() * (maxR - minR), th = Math.random() * 2 * Math.PI;
+  return { lat: p.lat + r * Math.cos(th) / 111320, lng: p.lng + r * Math.sin(th) / (111320 * Math.cos(p.lat * Math.PI / 180)) };
+}
+function maintainCoins() {
+  const now = Date.now();
+  save.coins = save.coins.filter(c => {
+    const gone = c.exp < now || map.distance([c.lat, c.lng], me) > 600;
+    if (gone) removeCoinMarker(c.id);
+    return !gone;
+  });
+  while (save.coins.length < COIN_COUNT) {
+    const q = randomNear(me, 30, 220), r = Math.random();
+    const c = { id: now + '-' + Math.random().toString(36).slice(2, 7), lat: q.lat, lng: q.lng,
+      v: r < 0.05 ? 10 : r < 0.25 ? 3 : 1, exp: now + COIN_TTL * (0.5 + Math.random()) };
+    save.coins.push(c); addCoinMarker(c);
+  }
+}
+function pickCoins() {
+  for (const c of [...save.coins]) {
+    if (map.distance([c.lat, c.lng], me) > COIN_RANGE) continue;
+    save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id); addGold(c.v);
+  }
+}
+function floatText(text) {
+  const p = me ? map.latLngToContainerPoint(me) : { x: innerWidth / 2, y: innerHeight / 2 };
+  const d = document.createElement('div'); d.className = 'float'; d.textContent = text;
+  d.style.left = p.x + 'px'; d.style.top = (p.y - 30) + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1200);
+}
+function addGold(n) {
+  save.gold += n; $('coins').textContent = '🪙 ' + save.gold;
+  floatText((n > 0 ? '+' : '') + n + '🪙');
+  if (n > 0) try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+}
+
+// ---- つくる ----
+const ITEMS = [
+  { id: 'flower', e: '🌸', name: '花畑', cost: 5, size: 26 }, { id: 'tree', e: '🌳', name: '木', cost: 10, size: 32 },
+  { id: 'bench', e: '🪑', name: 'ベンチ', cost: 15, size: 28 }, { id: 'lantern', e: '🏮', name: 'ちょうちん', cost: 20, size: 30 },
+  { id: 'tent', e: '⛺', name: 'テント', cost: 35, size: 34 }, { id: 'fountain', e: '⛲', name: '噴水', cost: 50, size: 38 },
+  { id: 'shrine', e: '⛩️', name: 'ちいさなほこら', cost: 60, size: 40 }, { id: 'house', e: '🏠', name: 'おうち', cost: 80, size: 40 },
+  { id: 'tower', e: '🗼', name: 'ひかりの塔', cost: 150, size: 46 }, { id: 'castle', e: '🏰', name: 'おしろ', cost: 300, size: 52 },
+];
+const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+const BUILD_RANGE = 40, MAX_BUILT = 300;
+const builtMarkers = new Map();
+let placing = null, placeCircle = null;
+function builtIcon(o, fresh) {
+  const it = ITEM[o.t], s = it.size + 8;
+  return L.divIcon({ className: 'built' + (fresh ? ' new' : ''), html: `<span style="font-size:${it.size}px">${it.e}</span>`, iconSize: [s, s], iconAnchor: [s / 2, s / 2] });
+}
+function addBuiltMarker(o, fresh) {
+  const m = L.marker([o.lat, o.lng], { icon: builtIcon(o, fresh), zIndexOffset: 200 }).addTo(map);
+  m.on('click', () => openObj(o)); builtMarkers.set(o.id, m);
+}
+function openBuildMenu() {
+  $('build-gold').textContent = '🪙 ' + save.gold;
+  $('build-list').innerHTML = ITEMS.map(i =>
+    `<button data-id="${i.id}" ${save.gold < i.cost ? 'disabled' : ''}><b>${i.e}</b>${i.name}<small>${i.cost}🪙</small></button>`).join('');
+  $('build-list').querySelectorAll('button').forEach(b => b.onclick = () => startPlacing(ITEM[b.dataset.id]));
+  $('build').hidden = false;
+}
+function startPlacing(it) {
+  if (!me) return toast('現在地を取得してからつくれます');
+  placing = it; $('build').hidden = true;
+  $('place-text').textContent = `${it.e} ${it.name}(${it.cost}🪙)を置く場所をタップ — 円の中だけ置けます`;
+  $('placebar').hidden = false;
+  if (placeCircle) map.removeLayer(placeCircle);
+  placeCircle = L.circle(me, { radius: BUILD_RANGE, color: '#ffd873', weight: 2, dashArray: '6 6', fillColor: '#ffd873', fillOpacity: 0.12, interactive: false }).addTo(map);
+}
+function stopPlacing() { placing = null; $('placebar').hidden = true; if (placeCircle) { map.removeLayer(placeCircle); placeCircle = null; } }
+function placeAt(ll) {
+  if (!placing || !me) return;
+  if (map.distance(ll, me) > BUILD_RANGE) return toast(`遠すぎます。あなたの周り${BUILD_RANGE}m以内に置こう`);
+  if (save.built.length >= MAX_BUILT) return toast('これ以上は置けません');
+  if (save.gold < placing.cost) return toast('コインが足りません');
+  const it = placing;
+  const o = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), t: it.id, lat: ll.lat, lng: ll.lng, d: todayStr() };
+  save.built.push(o); addBuiltMarker(o, true); addGold(-it.cost);
+  toast(`${it.e} ${it.name}をつくった！`); stopPlacing(); persist(); updateHud();
+}
+function openObj(o) {
+  if (placing) return;
+  const it = ITEM[o.t], refund = Math.floor(it.cost / 2);
+  $('obj-title').textContent = `${it.e} ${it.name}`; $('obj-sub').textContent = `${o.d} につくった`;
+  $('obj-del').textContent = `とりこわす (+${refund}🪙)`;
+  $('obj-del').onclick = () => {
+    const m = builtMarkers.get(o.id); if (m) map.removeLayer(m); builtMarkers.delete(o.id);
+    save.built.splice(save.built.indexOf(o), 1); addGold(refund); persist(); updateHud(); $('obj').hidden = true;
+  };
+  $('obj').hidden = false;
+}
+$('btn-build').onclick = openBuildMenu;
+$('build-close').onclick = () => { $('build').hidden = true; };
+$('obj-close').onclick = () => { $('obj').hidden = true; };
+$('place-cancel').onclick = stopPlacing;
+$('place-here').onclick = () => placeAt(me);
+save.coins.forEach(addCoinMarker);
+save.built.forEach(o => addBuiltMarker(o, false));
+$('coins').textContent = '🪙 ' + save.gold;
 
 // ---- 操作 ----
 map.on('dragstart', () => { follow = false; });
@@ -280,12 +388,13 @@ $('btn-debug').onclick = () => {
   if (debug) { follow = false; if (!me) updatePosition(map.getCenter(), 0); }
   else $('status').textContent = '位置情報を取得中…';
 };
-map.on('click', e => { if (debug) updatePosition(e.latlng, 0); });
+map.on('click', e => { if (placing) return placeAt(e.latlng); if (debug) updatePosition(e.latlng, 0); });
 $('btn-book').onclick = () => {
   const items = Object.values(save.found).sort((a, b) => b.date.localeCompare(a.date));
   $('book-list').innerHTML = items.length
     ? items.map(f => `<li>${f.e} <b>${esc(f.name)}</b><small>${f.k} ・ ${f.date}</small></li>`).join('')
     : '<li>まだ何も発見していません。❓を目指して歩こう！</li>';
+  $('book-list').insertAdjacentHTML('afterbegin', `<li>🏗️ つくったもの ${save.built.length}個 ／ 🪙 ${save.gold}</li>`);
   $('book').hidden = false;
 };
 $('book-close').onclick = () => { $('book').hidden = true; };

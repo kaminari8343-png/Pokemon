@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <div id="map"></div>
@@ -19,15 +19,37 @@
   <div class="stat"><b id="s-area">0.000 km²</b><small>はれた霧</small></div>
   <div class="stat"><b id="s-found">0</b><small>みつけた名所</small></div>
 </header>
-<div id="lvl"><span id="lvl-name"></span><div class="bar"><i id="lvl-fill"></i></div><small id="lvl-next"></small></div>
+<div id="lvl"><span id="coins">🪙 0</span><span id="lvl-name"></span><div class="bar"><i id="lvl-fill"></i></div><small id="lvl-next"></small></div>
 <div id="hint" hidden></div>
 <div id="toast" hidden></div>
 <div id="status">位置情報を取得中…</div>
 <div id="btns">
+  <button id="btn-build" title="つくる">🔨</button>
   <button id="btn-book" title="冒険の書">📖</button>
   <button id="btn-locate" title="現在地へ">📍</button>
   <button id="btn-debug" title="テスト移動">🧪</button>
 </div>
+<div id="placebar" hidden>
+  <span id="place-text"></span>
+  <button id="place-here">足もとに置く</button>
+  <button id="place-cancel">やめる</button>
+</div>
+<section id="build" hidden>
+  <div class="card">
+    <h2>🔨 つくる <small id="build-gold"></small></h2>
+    <p class="note">コインで買って、あなたの40m以内に置けます。</p>
+    <div id="build-list"></div>
+    <button id="build-close">閉じる</button>
+  </div>
+</section>
+<section id="obj" hidden>
+  <div class="card">
+    <h2 id="obj-title"></h2>
+    <p id="obj-sub" class="note"></p>
+    <button id="obj-del" class="danger"></button>
+    <button id="obj-close">閉じる</button>
+  </div>
+</section>
 <section id="book" hidden>
   <div class="card">
     <h2>📖 冒険の書</h2>
@@ -36,6 +58,6 @@
   </div>
 </section>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="game.js?v=7"></script>
+<script src="game.js?v=8"></script>
 </body>
 </html>

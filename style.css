@@ -55,3 +55,27 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 @keyframes zoom{from{transform:scale(0)}}
 @keyframes burst{to{transform:translate(var(--dx),var(--dy)) rotate(360deg);opacity:0}}
 @keyframes popin{0%,80%{opacity:1}100%{opacity:0}}
+
+#coins{font-size:14px;color:#fff3b0;white-space:nowrap}
+.coin span{display:inline-block;font-size:24px;animation:spin 1.6s linear infinite;filter:drop-shadow(0 0 6px #ffd873)}
+@keyframes spin{50%{transform:scaleX(.15)}}
+.built span{display:inline-block;line-height:1;filter:drop-shadow(0 3px 3px rgba(0,0,0,.5))}
+.built.new span{animation:build .6s cubic-bezier(.2,1.6,.4,1)}
+@keyframes build{from{transform:scale(0) translateY(20px)}}
+.float{position:fixed;z-index:3000;pointer-events:none;font-weight:700;font-size:18px;color:#fff3b0;text-shadow:0 2px 4px #000;
+  animation:rise 1.1s ease-out forwards;transform:translateX(-50%)}
+@keyframes rise{to{transform:translate(-50%,-55px);opacity:0}}
+#placebar{position:fixed;z-index:1500;left:10px;right:10px;bottom:76px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:rgba(24,30,44,.92);border:1px solid rgba(255,220,140,.5);border-radius:14px;padding:10px 12px;color:#f6ecd0;font-size:13px}
+#placebar span{flex:1 1 100%}
+#placebar button{flex:1;border:0;border-radius:10px;padding:9px;background:#ffd873;color:#3a2a10;font:inherit;font-weight:700}
+#placebar #place-cancel{background:#5b4326;color:#fff}
+#build,#obj{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center}
+.card h2 small{font-size:13px;font-weight:700;color:#8a5a00;margin-left:6px}
+.note{font-size:12px;opacity:.7;margin:0 0 10px}
+#build-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+#build-list button{display:flex;flex-direction:column;align-items:center;gap:2px;background:#fff8e1;color:#3a2a10;border:2px solid #d9c9a0;padding:8px 4px;font-size:14px;font-weight:700}
+#build-list button b{font-size:26px;font-weight:400}
+#build-list button small{font-weight:500;opacity:.8}
+#build-list button:disabled{opacity:.4}
+.card button.danger{background:#b3402a;margin-bottom:8px}
