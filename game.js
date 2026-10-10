@@ -11,7 +11,7 @@ const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.k
 
 // ---- 保存データ ----
 const KEY = 'sanpo-quest';
-const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, coins: [], built: [] }, JSON.parse(localStorage.getItem(KEY) || '{}'));
+const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [] }, JSON.parse(localStorage.getItem(KEY) || '{}'));
 save.coins = save.coins.filter(c => c.exp > Date.now());
 const explored = new Set(save.cells);
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -167,7 +167,7 @@ function checkFound() {
     if (save.found[p.id] || map.distance(p.latlng, me) > FOUND_RANGE) continue;
     save.found[p.id] = { name: p.name, e: p.e, k: p.k, date: todayStr() };
     p.marker.setIcon(poiIcon(p, true));
-    celebrate(p.e, `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙'); addGold(20);
+    celebrate(p.e, `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙 +1🔮'); addGold(20); addShard(1);
   }
 }
 const DIRS = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
@@ -212,7 +212,7 @@ function updateLevel() {
   $('lvl-fill').style.width = (next ? (xp - LEVELS[lv][0]) / (next[0] - LEVELS[lv][0]) * 100 : 100) + '%';
   $('lvl-next').textContent = next ? `次まで${Math.ceil(next[0] - xp)}pt` : 'MAX';
   const up = lastLv !== null && lv > lastLv; lastLv = lv;
-  if (up) { celebrate('🎖️', `レベルアップ！ ${LEVELS[lv][1]}`); addGold(50); }
+  if (up) { celebrate('🎖️', `レベルアップ！ ${LEVELS[lv][1]}`); addGold(50); addShard(1); }
 }
 function updateTint() {
   const d = new Date(), h = d.getHours() + d.getMinutes() / 60;
@@ -276,7 +276,7 @@ function updatePosition(latlng, accuracy) {
 // ---- コイン(歩いて拾う) ----
 const COIN_RANGE = 100, COIN_COUNT = 14, COIN_TTL = 30 * 60e3;
 const coinMarkers = new Map();
-const coinIcon = c => L.divIcon({ className: 'coin', html: `<span>${c.v >= 10 ? '💎' : c.v >= 3 ? '💰' : '🪙'}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+const coinIcon = c => L.divIcon({ className: 'coin', html: `<span>${c.k === 'shard' ? '🔮' : c.v >= 10 ? '💎' : c.v >= 3 ? '💰' : '🪙'}</span>`, iconSize: [30, 30], iconAnchor: [15, 15] });
 function addCoinMarker(c) { coinMarkers.set(c.id, L.marker([c.lat, c.lng], { icon: coinIcon(c), zIndexOffset: 500 }).addTo(map)); }
 function removeCoinMarker(id) { const m = coinMarkers.get(id); if (m) { map.removeLayer(m); coinMarkers.delete(id); } }
 function randomNear(p, minR, maxR) {
@@ -299,7 +299,7 @@ function maintainCoins() {
       ? randomNear(mg[Math.floor(Math.random() * mg.length)], 15, 110) : randomNear(me, 30, 220);
     const r = Math.random();
     const c = { id: now + '-' + Math.random().toString(36).slice(2, 7), lat: q.lat, lng: q.lng,
-      v: r < 0.05 ? 10 : r < 0.25 ? 3 : 1, exp: now + COIN_TTL * (0.5 + Math.random()) };
+      k: r > 0.94 ? 'shard' : undefined, v: r < 0.05 ? 10 : r < 0.25 ? 3 : 1, exp: now + COIN_TTL * (0.5 + Math.random()) };
     save.coins.push(c); addCoinMarker(c);
   }
 }
@@ -308,6 +308,7 @@ function pickCoins(accuracy) {
   for (const c of [...save.coins]) {
     if (map.distance([c.lat, c.lng], me) > range) continue;
     save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id);
+    if (c.k === 'shard') { addShard(1); continue; }
     const luck = Math.min(0.9, save.built.filter(o => ITEM[o.t].lucky && map.distance([o.lat, o.lng], [c.lat, c.lng]) <= 200)
       .reduce((s, o) => s + 0.15 * lvOf(o), 0));
     if (Math.random() < luck) { floatText('🍀ご利益 2倍！'); addGold(c.v * 2); } else addGold(c.v);
@@ -318,8 +319,10 @@ function floatText(text) {
   const d = document.createElement('div'); d.className = 'float'; d.textContent = text;
   d.style.left = p.x + 'px'; d.style.top = (p.y - 30) + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1200);
 }
+const updateWallet = () => { $('coins').textContent = `🪙 ${save.gold}  🔮 ${save.shards}`; };
+function addShard(n) { save.shards += n; updateWallet(); floatText(`+${n}🔮`); if (n > 0) try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} }
 function addGold(n) {
-  save.gold += n; $('coins').textContent = '🪙 ' + save.gold;
+  save.gold += n; updateWallet();
   floatText((n > 0 ? '+' : '') + n + '🪙');
   if (n > 0) try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
 }
@@ -327,7 +330,6 @@ function addGold(n) {
 // ---- つくる ----
 // どのオブジェクトもコインを生産し、歩いて訪れると育ち、進化する
 const LV_RATE = [1, 2.2, 4.5];     // 進化ごとの収穫倍率
-const EVO_DAYS = [0, 2, 4];        // 進化に必要な「来た日数」(Lv1→2は2日、Lv2→3は4日)
 const HARVEST_CAP_H = 8;           // 何時間分までためられるか
 const ITEMS = [
   { id: 'flower', cost: 5, size: 26, rate: 1.5, role: '花が咲いて、コインが実る', chain: [['🌸', '花畑'], ['🌷', 'チューリップ畑'], ['🌻', 'ひまわり畑']] },
@@ -346,7 +348,7 @@ const face = o => ITEM[o.t].chain[lvOf(o) - 1];                 // [絵文字, �
 const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1];
 const evoCost = o => ITEM[o.t].cost * (lvOf(o) === 1 ? 2 : 4);
 const accrued = o => Math.min(HARVEST_CAP_H, (Date.now() - o.last) / 3600e3) * rateOf(o);
-const BUILD_RANGE = 40, MAX_BUILT = 300;
+const BUILD_RANGE = 40, MAX_BUILT = 300, SHARD_PRICE = 60;
 const builtMarkers = new Map();
 let placing = null, placeCircle = null;
 
@@ -369,8 +371,10 @@ function openBuildMenu() {
   $('build-gold').textContent = '🪙 ' + save.gold;
   $('build-list').innerHTML = ITEMS.map(i =>
     `<button data-id="${i.id}" ${save.gold < i.cost ? 'disabled' : ''}><b>${i.chain[0][0]}</b>${i.chain[0][1]}` +
-    `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><small>${i.chain.map(c => c[0]).join('→')}</small></button>`).join('');
-  $('build-list').querySelectorAll('button').forEach(b => b.onclick = () => startPlacing(ITEM[b.dataset.id]));
+    `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><small>${i.chain.map(c => c[0]).join('→')}</small></button>`).join('') +
+    `<button id="buy-shard" ${save.gold < SHARD_PRICE ? 'disabled' : ''}><b>🔮</b>進化のかけら<small>${SHARD_PRICE}🪙</small><small>所持 ${save.shards}</small></button>`;
+  $('build-list').querySelectorAll('button[data-id]').forEach(b => b.onclick = () => startPlacing(ITEM[b.dataset.id]));
+  $('buy-shard').onclick = () => { if (save.gold < SHARD_PRICE) return; addGold(-SHARD_PRICE); addShard(1); persist(); openBuildMenu(); };
   $('build').hidden = false;
 }
 function startPlacing(it) {
@@ -399,19 +403,18 @@ function visitBuilt() {
   let got = 0; const parts = [];
   for (const o of save.built) {
     if (map.distance([o.lat, o.lng], me) > COIN_RANGE) continue;
-    if (o.lastDay !== todayStr()) { o.lastDay = todayStr(); o.days++; parts.push(`${face(o)[0]}${o.days}日目`); }
     const a = accrued(o);
     if (a >= 1) { const n = Math.floor(a); o.last = Date.now() - (a - n) / rateOf(o) * 3600e3; got += n; parts.push(`${face(o)[0]}+${n}`); }
   }
   if (parts.length) { if (got) addGold(got); toast('🌾 ' + parts.join('  ')); refreshBuilt(); }
 }
 
-// 進化: 「来た日数」と「コイン」と「近くにいること」が必要
+// 進化: 「進化のかけら」と「コイン」が必要(場所は問わない)
+const EVO_SHARDS = [0, 1, 2];   // Lv1→2は1個、Lv2→3は2個
 function evolveCheck(o) {
   const lv = lvOf(o);
   if (lv >= 3) return { ok: false, why: '最高の姿です' };
-  if (o.days < EVO_DAYS[lv]) return { ok: false, why: `あと${EVO_DAYS[lv] - o.days}日、ここに来よう (来た日数 ${o.days}/${EVO_DAYS[lv]})` };
-  if (!me || map.distance([o.lat, o.lng], me) > COIN_RANGE) return { ok: false, why: '近くまで行くと進化できます' };
+  if (save.shards < EVO_SHARDS[lv]) return { ok: false, why: `🔮かけらが足りません (必要${EVO_SHARDS[lv]} / 所持${save.shards})` };
   if (save.gold < evoCost(o)) return { ok: false, why: `コインが足りません (${evoCost(o)}🪙)` };
   return { ok: true };
 }
@@ -420,16 +423,16 @@ function openObj(o) {
   const it = ITEM[o.t], lv = lvOf(o), refund = Math.floor(o.spent / 2);
   $('obj-title').textContent = `${face(o)[0]} ${face(o)[1]} ${'★'.repeat(lv - 1)}`;
   let html = `<div>${it.role}</div><div>収穫: 1時間に ${rateOf(o).toFixed(1)}🪙 (最大${HARVEST_CAP_H}時間分)<br>たまっているコイン: <b>${Math.floor(accrued(o))}🪙</b>` +
-    `<br>来た日数: ${o.days}日 ／ つくった日: ${o.d}</div>`;
+    `<br>つくった日: ${o.d}</div>`;
   if (it.magnet) html += `<div>🧲 近くにコインを呼ぶ力あり</div>`;
   if (it.lucky) html += `<div>🍀 近くのコインが2倍になることがある</div>`;
-  if (lv < 3) html += `<div>進化先: ${it.chain[lv][0]} ${it.chain[lv][1]}</div>`;
+  if (lv < 3) html += `<div>進化先: ${it.chain[lv][0]} ${it.chain[lv][1]}<br>必要: 🔮×${EVO_SHARDS[lv]} ＋ 🪙${evoCost(o)}</div>`;
   $('obj-sub').innerHTML = html;
   const ev = evolveCheck(o), eb = $('obj-evo');
-  eb.hidden = lv >= 3; eb.disabled = !ev.ok; eb.textContent = ev.ok ? `進化させる (${evoCost(o)}🪙)` : ev.why;
+  eb.hidden = lv >= 3; eb.disabled = !ev.ok; eb.textContent = ev.ok ? `進化させる (🔮×${EVO_SHARDS[lv]} ＋ ${evoCost(o)}🪙)` : ev.why;
   eb.onclick = () => {
     if (!evolveCheck(o).ok) return;
-    const cost = evoCost(o); addGold(-cost); o.spent += cost; o.lv = lv + 1;
+    const cost = evoCost(o); addGold(-cost); addShard(-EVO_SHARDS[lv]); o.spent += cost; o.lv = lv + 1;
     refreshBuilt(); celebrate(face(o)[0], `${face(o)[1]}に進化！`); persist(); updateHud(); $('obj').hidden = true;
   };
   $('obj-del').textContent = `とりこわす (+${refund}🪙)`;
@@ -451,7 +454,7 @@ $('place-cancel').onclick = stopPlacing;
 $('place-here').onclick = () => placeAt(me);
 save.coins.forEach(addCoinMarker);
 save.built.forEach(o => addBuiltMarker(o, false));
-$('coins').textContent = '🪙 ' + save.gold;
+updateWallet();
 
 // ---- 操作 ----
 map.on('dragstart', () => { follow = false; });
