@@ -1,13 +1,32 @@
-html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,sans-serif;overscroll-behavior:none;background:#101820;touch-action:none}
-#world{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
-#hud{position:absolute;z-index:10;top:10px;left:10px;right:10px;display:flex;gap:8px}
-.stat{flex:1;background:rgba(16,24,32,.78);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:8px 10px;
-  text-align:center;color:#f3ecd8;backdrop-filter:blur(4px)}
-.stat b{display:block;font-size:17px}.stat small{font-size:11px;opacity:.7}
-#status,#toast{position:absolute;z-index:10;background:rgba(16,24,32,.78);color:#f3ecd8;padding:6px 12px;border-radius:14px;font-size:12px}
-#status{bottom:14px;left:12px}
-#toast{top:84px;left:50%;transform:translateX(-50%);font-size:14px;padding:10px 16px;max-width:85%;text-align:center}
-#toast[hidden]{display:none}
-#btns{position:absolute;z-index:10;right:12px;bottom:14px;display:flex;flex-direction:column;gap:8px}
-#btns button{width:46px;height:46px;font-size:22px;border:0;border-radius:50%;background:rgba(243,236,216,.95);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,sans-serif;overscroll-behavior:none;background:#101820}
+#map{position:absolute;inset:0;background:#d8c9a3}
+/* 現実の地図を古地図(羊皮紙)風に */
+.leaflet-tile-pane{filter:sepia(.7) saturate(1.25) hue-rotate(-12deg) contrast(.95) brightness(1.03)}
+#fog{position:absolute;inset:0;width:100%;height:100%;z-index:500;pointer-events:none}
+#hud{position:absolute;z-index:1000;top:10px;left:10px;right:10px;display:flex;gap:8px}
+.stat{flex:1;background:rgba(24,30,44,.82);border:1px solid rgba(255,220,140,.35);border-radius:14px;padding:8px 10px;
+  text-align:center;color:#f6ecd0}
+.stat b{display:block;font-size:17px}.stat small{font-size:11px;opacity:.75}
+#hint,#status,#toast{position:absolute;z-index:1000;background:rgba(24,30,44,.86);color:#f6ecd0;
+  border:1px solid rgba(255,220,140,.35);padding:6px 12px;border-radius:14px;font-size:13px}
+#hint{top:78px;left:50%;transform:translateX(-50%);white-space:nowrap}
+#status{bottom:14px;left:12px;font-size:12px}
+#toast{top:122px;left:50%;transform:translateX(-50%);font-size:15px;padding:10px 16px;max-width:85%;text-align:center;background:rgba(80,50,10,.92)}
+[hidden]{display:none!important}
+#btns{position:absolute;z-index:1000;right:12px;bottom:14px;display:flex;flex-direction:column;gap:8px}
+#btns button{width:46px;height:46px;font-size:22px;border:0;border-radius:50%;background:rgba(246,236,208,.96);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 #btns button.on{background:#ffd873}
+.me{font-size:28px;text-align:center;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+.poi{text-align:center;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+.poi .e{font-size:30px;display:block}
+.poi .n{display:block;font-size:11px;font-weight:700;color:#3a2a10;background:rgba(255,246,220,.92);border-radius:8px;padding:1px 6px;white-space:nowrap;margin-top:1px}
+.poi.unk .e{font-size:26px;color:#fff;text-shadow:0 0 6px #ffd873,0 0 12px #ffd873;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{transform:scale(1.2)}}
+.trail{filter:drop-shadow(0 0 4px #ffcf4a)}
+#book{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center}
+.card{background:#f6ecd0;color:#3a2a10;border-radius:16px;padding:18px;width:min(340px,90vw);max-height:80vh;overflow:auto}
+.card h2{margin:0 0 8px}
+#book-list{list-style:none;padding:0;margin:0 0 12px}
+#book-list li{padding:8px 0;border-bottom:1px solid #d9c9a0;font-size:14px}
+#book-list small{display:block;opacity:.65}
+.card button{width:100%;border:0;border-radius:10px;padding:10px;background:#5b4326;color:#fff;font:inherit}

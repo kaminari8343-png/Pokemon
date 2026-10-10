@@ -3,24 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Sanpo World</title>
-<link rel="stylesheet" href="style.css?v=4">
+<title>Sanpo Quest</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
-<canvas id="world"></canvas>
+<div id="map"></div>
+<canvas id="fog"></canvas>
 <header id="hud">
   <div class="stat"><b id="s-today">0 m</b><small>今日の散歩</small></div>
-  <div class="stat"><b id="s-area">0.000 km²</b><small>ひらいた土地</small></div>
+  <div class="stat"><b id="s-area">0.000 km²</b><small>はれた霧</small></div>
   <div class="stat"><b id="s-found">0</b><small>みつけた名所</small></div>
 </header>
+<div id="hint" hidden></div>
 <div id="toast" hidden></div>
 <div id="status">位置情報を取得中…</div>
 <div id="btns">
-  <button id="btn-zoom-in">＋</button>
-  <button id="btn-zoom-out">－</button>
+  <button id="btn-book" title="冒険の書">📖</button>
   <button id="btn-locate" title="現在地へ">📍</button>
   <button id="btn-debug" title="テスト移動">🧪</button>
 </div>
-<script src="game.js?v=4"></script>
+<section id="book" hidden>
+  <div class="card">
+    <h2>📖 冒険の書</h2>
+    <ul id="book-list"></ul>
+    <button id="book-close">閉じる</button>
+  </div>
+</section>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="game.js?v=5"></script>
 </body>
 </html>
