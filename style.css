@@ -1,15 +1,13 @@
-html,body{margin:0;height:100%;font-family:system-ui,sans-serif;overscroll-behavior:none;background:#e9e2d0}
-#map{position:absolute;inset:0}
-#fog{position:absolute;inset:0;width:100%;height:100%;z-index:500;pointer-events:none}
-#hud{position:absolute;z-index:1000;top:10px;left:10px;right:10px;display:flex;gap:8px}
-.stat{flex:1;background:rgba(255,252,243,.92);border-radius:14px;padding:8px 10px;text-align:center;
-  box-shadow:0 2px 8px rgba(0,0,0,.15);color:#3d3425}
-.stat b{display:block;font-size:17px}
-.stat small{font-size:11px;opacity:.7}
-#status{position:absolute;z-index:1000;bottom:14px;left:12px;background:rgba(255,252,243,.92);color:#3d3425;
-  padding:6px 12px;border-radius:14px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
-#btns{position:absolute;z-index:1000;right:12px;bottom:14px;display:flex;flex-direction:column;gap:8px}
-#btns button{width:46px;height:46px;font-size:22px;border:0;border-radius:50%;background:rgba(255,252,243,.95);
-  box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer}
+html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,sans-serif;overscroll-behavior:none;background:#101820;touch-action:none}
+#world{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
+#hud{position:absolute;z-index:10;top:10px;left:10px;right:10px;display:flex;gap:8px}
+.stat{flex:1;background:rgba(16,24,32,.78);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:8px 10px;
+  text-align:center;color:#f3ecd8;backdrop-filter:blur(4px)}
+.stat b{display:block;font-size:17px}.stat small{font-size:11px;opacity:.7}
+#status,#toast{position:absolute;z-index:10;background:rgba(16,24,32,.78);color:#f3ecd8;padding:6px 12px;border-radius:14px;font-size:12px}
+#status{bottom:14px;left:12px}
+#toast{top:84px;left:50%;transform:translateX(-50%);font-size:14px;padding:10px 16px;max-width:85%;text-align:center}
+#toast[hidden]{display:none}
+#btns{position:absolute;z-index:10;right:12px;bottom:14px;display:flex;flex-direction:column;gap:8px}
+#btns button{width:46px;height:46px;font-size:22px;border:0;border-radius:50%;background:rgba(243,236,216,.95);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 #btns button.on{background:#ffd873}
-.me{font-size:26px;text-align:center;line-height:1;filter:drop-shadow(0 2px 2px rgba(0,0,0,.4))}
