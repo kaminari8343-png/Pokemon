@@ -1,162 +1,139 @@
 'use strict';
 // ---- 設定 ----
-const SPAWN_RADIUS = 120;     // プレイヤー周囲に出現させる半径(m)
-const CATCH_RANGE = 40;       // 捕獲できる距離(m)
-const MAX_MONS = 8;           // 同時に出現する数
-const MON_TTL = 5 * 60e3;     // 出現時間(ms)
-const MIN_STEP = 3;           // これ未満の移動はノイズとして無視(m)
-const MAX_SPEED = 12;         // m/s これ超は車・GPS飛びとして歩行距離に加算しない
+const CELL = 20;            // 探索マスの1辺(m)
+const REVEAL = 70;          // 現在地から霧が晴れる半径(m)
+const MIN_STEP = 3;         // これ未満の移動はノイズとして無視(m)
+const MAX_SPEED = 12;       // m/s これ超は車・GPS飛びとして歩行距離に加算しない
+const FOG_COLOR = '#d9d0b8';
+const FOG_ALPHA = 0.93;
 
-// オリジナルのモンスター定義 (rarity: 出現重み, difficulty: 捕獲の難しさ)
-const SPECIES = [
-  { id: 'leafy',  name: 'リーフィ',   emoji: '🌱', weight: 40, difficulty: 0.2 },
-  { id: 'aqua',   name: 'アクア',     emoji: '💧', weight: 30, difficulty: 0.3 },
-  { id: 'flare',  name: 'フレア',     emoji: '🔥', weight: 20, difficulty: 0.45 },
-  { id: 'volt',   name: 'ボルト',     emoji: '⚡', weight: 8,  difficulty: 0.6 },
-  { id: 'lunar',  name: 'ルナ',       emoji: '🌙', weight: 2,  difficulty: 0.8 },
-];
-
-// ---- 状態(localStorage に保存) ----
-const save = JSON.parse(localStorage.getItem('walkmon') || '{"caught":{},"walked":0}');
-const persist = () => localStorage.setItem('walkmon', JSON.stringify(save));
+// ---- 保存データ ----
+const KEY = 'sanpo-map';
+const save = Object.assign({ cells: [], total: 0, day: '', today: 0 }, JSON.parse(localStorage.getItem(KEY) || '{}'));
+const explored = new Set(save.cells);
+const persist = () => { save.cells = [...explored]; localStorage.setItem(KEY, JSON.stringify(save)); };
+const todayStr = () => new Date().toISOString().slice(0, 10);
+if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
 
 // ---- 地図 ----
-const map = L.map('map', { zoomControl: false }).setView([35.681236, 139.767125], 17); // 初期値: 東京駅
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19, attribution: '© OpenStreetMap contributors'
+const map = L.map('map', { zoomControl: false }).setView([35.681236, 139.767125], 17);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  subdomains: 'abcd', maxZoom: 19,
+  attribution: '© OpenStreetMap contributors © CARTO'
 }).addTo(map);
 
 const $ = id => document.getElementById(id);
-const icon = (emoji, cls) => L.divIcon({ html: emoji, className: cls, iconSize: [36, 36] });
-let me = null, meMarker = null, lastPos = null, debug = false;
-const mons = []; // {species, latlng, marker, expires}
+let me = null, meMarker = null, last = null, debug = false, follow = true;
 
-function toast(msg) {
-  const t = $('toast'); t.textContent = msg; t.hidden = false;
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2500);
+// ---- 探索マス ----
+const dLat = CELL / 111320;
+const dLng = lat => CELL / (111320 * Math.cos(lat * Math.PI / 180));
+const key = (i, j) => i + ',' + j;
+const cellCenter = (i, j) => {
+  const lat = (i + 0.5) * dLat;
+  return L.latLng(lat, (j + 0.5) * dLng(lat));
+};
+function reveal(p) {
+  let added = 0;
+  const di = Math.ceil(REVEAL / CELL), i0 = Math.floor(p.lat / dLat);
+  for (let i = i0 - di; i <= i0 + di; i++) {
+    const rowLat = (i + 0.5) * dLat, w = dLng(rowLat), j0 = Math.floor(p.lng / w);
+    for (let j = j0 - di - 1; j <= j0 + di + 1; j++) {
+      if (map.distance(cellCenter(i, j), p) <= REVEAL && !explored.has(key(i, j))) {
+        explored.add(key(i, j)); added++;
+      }
+    }
+  }
+  return added;
 }
-const dist = (a, b) => map.distance(a, b);
+
+// ---- 霧の描画 ----
+const fog = $('fog'), ctx = fog.getContext('2d');
+function resizeFog() {
+  const r = devicePixelRatio || 1;
+  fog.width = innerWidth * r; fog.height = innerHeight * r;
+  drawFog();
+}
+function drawFog() {
+  const r = devicePixelRatio || 1, W = fog.width, H = fog.height;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.clearRect(0, 0, W, H);
+  ctx.globalAlpha = FOG_ALPHA; ctx.fillStyle = FOG_COLOR; ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'destination-out';
+  const c = map.getCenter();
+  const mpp = 40075016.686 * Math.cos(c.lat * Math.PI / 180) / (256 * Math.pow(2, map.getZoom()));
+  const rad = (CELL * 1.6 / mpp) * r;               // マスより少し大きく描いて繋げる
+  const b = map.getBounds().pad(0.2);
+  const iMin = Math.floor(b.getSouth() / dLat), iMax = Math.floor(b.getNorth() / dLat);
+  for (let i = iMin; i <= iMax; i++) {
+    const w = dLng((i + 0.5) * dLat);
+    const jMin = Math.floor(b.getWest() / w), jMax = Math.floor(b.getEast() / w);
+    for (let j = jMin; j <= jMax; j++) {
+      if (!explored.has(key(i, j))) continue;
+      const pt = map.latLngToContainerPoint(cellCenter(i, j));
+      const x = pt.x * r, y = pt.y * r;
+      const g = ctx.createRadialGradient(x, y, rad * 0.35, x, y, rad);
+      g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, 7); ctx.fill();
+    }
+  }
+}
+map.on('move zoom viewreset', drawFog);
+addEventListener('resize', resizeFog);
+
+// ---- 表示 ----
+const fmtDist = m => m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+function updateHud() {
+  $('s-today').textContent = fmtDist(save.today);
+  $('s-total').textContent = fmtDist(save.total);
+  $('s-area').textContent = (explored.size * CELL * CELL / 1e6).toFixed(3) + ' km²';
+}
 
 // ---- 位置更新 ----
 function updatePosition(latlng, accuracy) {
   me = latlng;
   if (!meMarker) {
-    meMarker = L.marker(latlng, { icon: icon('🚶', 'mon me'), zIndexOffset: 1000 }).addTo(map);
+    meMarker = L.marker(latlng, { icon: L.divIcon({ html: '🚶', className: 'me', iconSize: [30, 30] }), zIndexOffset: 1000 }).addTo(map);
     map.setView(latlng, 17);
   } else meMarker.setLatLng(latlng);
 
-  if (lastPos) {
-    const d = dist(lastPos, latlng);
-    if (d >= MIN_STEP) {
-      const dt = (Date.now() - lastPos.t) / 1000;
-      if (d / Math.max(dt, 1) <= MAX_SPEED) { save.walked += d; persist(); }
-      lastPos = Object.assign(L.latLng(latlng), { t: Date.now() });
-    }
-  } else lastPos = Object.assign(L.latLng(latlng), { t: Date.now() });
-
-  $('status').textContent = debug ? 'テスト移動中(地図タップで移動)'
-    : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`;
-  $('walked').textContent = save.walked >= 1000 ? (save.walked / 1000).toFixed(2) + ' km' : Math.round(save.walked) + ' m';
-  maintainSpawns();
-  if (!debug) map.panTo(latlng, { animate: true });
-}
-
-// ---- 出現 ----
-function pickSpecies() {
-  const total = SPECIES.reduce((s, x) => s + x.weight, 0);
-  let r = Math.random() * total;
-  return SPECIES.find(s => (r -= s.weight) < 0) || SPECIES[0];
-}
-function randomNear(center, minR, maxR) {
-  const r = minR + Math.random() * (maxR - minR), th = Math.random() * 2 * Math.PI;
-  const dLat = (r * Math.cos(th)) / 111320;
-  const dLng = (r * Math.sin(th)) / (111320 * Math.cos(center.lat * Math.PI / 180));
-  return L.latLng(center.lat + dLat, center.lng + dLng);
-}
-function maintainSpawns() {
   const now = Date.now();
-  for (let i = mons.length - 1; i >= 0; i--) {
-    const m = mons[i];
-    if (m.expires < now || dist(m.latlng, me) > SPAWN_RADIUS * 2) { map.removeLayer(m.marker); mons.splice(i, 1); }
-  }
-  while (mons.length < MAX_MONS) {
-    const species = pickSpecies(), latlng = randomNear(me, 20, SPAWN_RADIUS);
-    const marker = L.marker(latlng, { icon: icon(species.emoji, 'mon') }).addTo(map);
-    const mon = { species, latlng, marker, expires: now + MON_TTL * (0.5 + Math.random()) };
-    marker.on('click', () => onMonClick(mon));
-    mons.push(mon);
-  }
-}
-setInterval(() => me && maintainSpawns(), 10000);
-
-// ---- 捕獲 ----
-let current = null, raf = 0;
-function onMonClick(mon) {
-  const d = dist(mon.latlng, me);
-  if (d > CATCH_RANGE) return toast(`遠すぎる！あと ${Math.round(d - CATCH_RANGE)}m 近づこう`);
-  current = mon;
-  $('c-emoji').textContent = mon.species.emoji;
-  $('c-name').textContent = mon.species.name;
-  $('c-msg').textContent = 'タイミングよくボールを投げよう！';
-  $('c-throw').disabled = false;
-  $('catch').hidden = false;
-  // 緑ゾーン: 難しいほど狭い
-  const w = Math.round(30 - mon.species.difficulty * 20);
-  Object.assign($('c-ring').style, { width: w + '%', left: (50 - w / 2) + '%' });
-  const start = performance.now();
-  (function loop(t) {
-    const pos = (Math.sin((t - start) / 350) + 1) * 50; // 0..100 を往復
-    $('c-bar').style.setProperty('--pos', pos + '%');
-    $('c-bar').dataset.pos = pos;
-    raf = requestAnimationFrame(loop);
-  })(start);
-}
-function closeCatch() { cancelAnimationFrame(raf); $('catch').hidden = true; current = null; }
-$('c-throw').onclick = () => {
-  const bar = $('c-bar'), pos = +bar.dataset.pos, ring = $('c-ring');
-  const lo = parseFloat(ring.style.left), hi = lo + parseFloat(ring.style.width);
-  const hit = pos >= lo && pos <= hi;
-  const ok = hit ? Math.random() > current.species.difficulty * 0.5 : Math.random() < 0.1;
-  const mon = current;
-  if (ok) {
-    save.caught[mon.species.id] = (save.caught[mon.species.id] || 0) + 1; persist();
-    map.removeLayer(mon.marker); mons.splice(mons.indexOf(mon), 1);
-    toast(`${mon.species.name} をつかまえた！`); closeCatch();
-  } else {
-    $('c-msg').textContent = hit ? 'おしい！ボールから出てきた！' : 'はずれ！';
-    if (Math.random() < 0.25) { // 逃げられる
-      map.removeLayer(mon.marker); mons.splice(mons.indexOf(mon), 1);
-      toast(`${mon.species.name} は逃げてしまった…`); closeCatch();
+  if (last) {
+    const d = map.distance(last.p, latlng);
+    if (d >= MIN_STEP) {
+      if (d / Math.max((now - last.t) / 1000, 1) <= MAX_SPEED) {
+        if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
+        save.today += d; save.total += d;
+      }
+      last = { p: latlng, t: now };
     }
-  }
-};
-$('c-run').onclick = closeCatch;
+  } else last = { p: latlng, t: now };
 
-// ---- 図鑑 ----
-$('btn-dex').onclick = () => {
-  $('dex-list').innerHTML = SPECIES.map(s => {
-    const n = save.caught[s.id] || 0;
-    return `<li>${n ? s.emoji + ' ' + s.name : '❓ ？？？'} <span style="float:right">×${n}</span></li>`;
-  }).join('');
-  $('dex').hidden = false;
-};
-$('dex-close').onclick = () => $('dex').hidden = true;
+  reveal(latlng); persist(); updateHud();
+  $('status').textContent = debug ? 'テスト移動中(地図タップで移動)' : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`;
+  if (follow) map.panTo(latlng, { animate: true }); else drawFog();
+}
 
-// ---- テスト移動(PCで動作確認用): 地図タップで現在地をワープ ----
+// ---- 操作 ----
+map.on('dragstart', () => { follow = false; });
+$('btn-locate').onclick = () => { follow = true; if (me) map.setView(me, 17); };
 $('btn-debug').onclick = () => {
-  debug = !debug;
-  $('btn-debug').textContent = 'テスト移動: ' + (debug ? 'ON' : 'OFF');
-  if (debug && !me) updatePosition(map.getCenter(), 0);
+  debug = !debug; $('btn-debug').classList.toggle('on', debug);
+  if (debug) { follow = false; if (!me) updatePosition(map.getCenter(), 0); }
+  else $('status').textContent = '位置情報を取得中…';
 };
 map.on('click', e => { if (debug) updatePosition(e.latlng, 0); });
 
 // ---- GPS ----
 if (!navigator.geolocation) {
-  $('status').textContent = '位置情報に未対応 → テスト移動をONに';
+  $('status').textContent = '位置情報に未対応 → 🧪をONに';
 } else {
   navigator.geolocation.watchPosition(
     p => { if (!debug) updatePosition(L.latLng(p.coords.latitude, p.coords.longitude), p.coords.accuracy); },
-    err => { $('status').textContent = '位置情報を取得できません: ' + err.message + ' (テスト移動をON)'; },
+    err => { $('status').textContent = '位置情報を取得できません: ' + err.message + ' (🧪でテスト)'; },
     { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
   );
 }
+updateHud(); resizeFog();
