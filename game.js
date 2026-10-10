@@ -19,8 +19,8 @@ const persist = () => { save.cells = [...explored]; try { localStorage.setItem(K
 
 // ---- 地図(現実の地図を古地図風に表示) ----
 const map = L.map('map', { zoomControl: false }).setView([35.681236, 139.767125], 17);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-  subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap contributors © CARTO'
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 const $ = id => document.getElementById(id);
 const trailLine = L.polyline([], { color: '#ffcf4a', weight: 5, opacity: 0.95, className: 'trail' }).addTo(map);
