@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Walk Monsters</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map"></div>
+<header id="hud">
+  <span id="status">位置情報を取得中…</span>
+  <span id="walked">0 m</span>
+  <button id="btn-dex">図鑑</button>
+  <button id="btn-debug">テスト移動: OFF</button>
+</header>
+<div id="toast" hidden></div>
+
+<section id="catch" hidden>
+  <div class="card">
+    <div id="c-emoji"></div>
+    <div id="c-name"></div>
+    <div id="c-bar"><div id="c-ring"></div></div>
+    <p id="c-msg">タイミングよくボールを投げよう！</p>
+    <button id="c-throw">ボールを投げる</button>
+    <button id="c-run" class="sub">にげる</button>
+  </div>
+</section>
+
+<section id="dex" hidden>
+  <div class="card">
+    <h2>図鑑</h2>
+    <ul id="dex-list"></ul>
+    <button id="dex-close" class="sub">閉じる</button>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
