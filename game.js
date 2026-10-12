@@ -1659,6 +1659,7 @@ function renderBook() {
   if (bookTab === 'daily') html = dailyHtml();
   else if (bookTab === 'map') html = japanMapHtml(items);
   else if (bookTab === 'titles') html = titlesHtml();
+  else if (bookTab === 'friends') html = typeof onlineHtml === 'function' ? onlineHtml() : '';
   else if (bookTab === 'town') html = townHtml();
   else if (bookTab === 'recent') html = items.length ? '<ul>' + items.map(bookItem).join('') + '</ul>' : '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
   else {
@@ -1686,7 +1687,7 @@ function renderBook() {
         [...tm.entries()].map(([t, fs]) => t === '—' ? (fs.length ? `<ul>${fs.map(bookItem).join('')}</ul>` : '')
           : `<details data-k="${esc(p + '|' + c + '|' + t)}" ${openKeys.has(p + '|' + c + '|' + t) ? 'open' : ''}><summary>${esc(t)}<b>${fs.length}</b></summary><ul>${fs.map(bookItem).join('')}</ul></details>`).join('') + '</details>').join('') + '</details>').join('');
   }
-  $('book-body').innerHTML = html; if (bookTab === 'town') wireTown();
+  $('book-body').innerHTML = html; if (bookTab === 'town') wireTown(); if (bookTab === 'friends' && typeof wireOnline === 'function') wireOnline();
   const sn = $('sort-now'); if (sn) sn.onclick = () => { regionFailAt = 0; sn.textContent = '実行中…'; processRegions().then(() => { if (!$('book').hidden) renderBook(); }); };
   $('book-body').querySelectorAll('li[data-lat]').forEach(li => li.onclick = () => {      // タップでその場所へ
     const lat = parseFloat(li.dataset.lat), lng = parseFloat(li.dataset.lng); if (isNaN(lat)) return;
@@ -1697,7 +1698,7 @@ function renderBook() {
     toast(reg ? `${p}\n訪れた市区町村 ${cities} ／ 名所 ${found}\n初めて訪れた日 ${reg.first}` : `${p}\nまだ訪れていません`);
   });
 }
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { bookTab = b.dataset.tab; renderBook(); });
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { bookTab = b.dataset.tab; renderBook(); if (bookTab === 'friends' && typeof olSync === 'function') olSync(true); });
 $('coins').onclick = () => { bookTab = 'daily'; $('btn-book').onclick(); };
 $('btn-book').onclick = () => { bookFresh = true; renderBook(); $('book').hidden = false; processRegions().then(() => { if (!$('book').hidden) renderBook(); }); };
 $('book-close').onclick = () => { $('book').hidden = true; };
@@ -1786,6 +1787,7 @@ const visited = p => explored.has(cellOf(p));
 const gateHtml = g => `<div class="gate"><svg viewBox="0 0 64 64" width="58" height="58"><defs><radialGradient id="gg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="#9be7ff"/><stop offset="1" stop-color="#6a4bd8"/></radialGradient></defs><ellipse cx="32" cy="50" rx="24" ry="8" fill="#000" opacity=".25"/><path d="M12 52V26a20 20 0 0 1 40 0v26" fill="none" stroke="#8a7a66" stroke-width="7" stroke-linecap="round"/><path d="M12 52V26a20 20 0 0 1 40 0v26" fill="none" stroke="#c9b99f" stroke-width="3" stroke-linecap="round"/><ellipse class="gv" cx="32" cy="38" rx="14" ry="19" fill="url(#gg)"/><path class="gs" d="M32 22c8 0 12 8 6 13s-12 2-10 9" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".85"/></svg><i class="gn">${esc(g.name)}</i></div>`;
 function addGateMarker(g) { gateMarkers.set(g.id, addPin(g, '', gateHtml(g), () => openGate(g))); }
 save.gates.forEach(addGateMarker);
+if (typeof onlineInit === 'function') onlineInit();
 function nearName(p) {
   let best = null, bd = 200;
   for (const q of pois.values()) { const d = dist(p, q); if (d < bd && save.found[q.id]) { bd = d; best = q; } }
