@@ -61,7 +61,7 @@ function buildStyle() {
     light: { anchor: 'map', color: '#fff1d6', intensity: 0.5, position: [1.2, 205, 40] },
     sources: {
       ofm: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      trail: { type: 'geojson', data: EMPTY }, place: { type: 'geojson', data: EMPTY }, roads: { type: 'geojson', data: EMPTY }, roadsyn: { type: 'geojson', data: EMPTY },
+      trail: { type: 'geojson', data: EMPTY }, place: { type: 'geojson', data: EMPTY }, cityflat: { type: 'geojson', data: EMPTY }, city3d: { type: 'geojson', data: EMPTY }, citylane: { type: 'geojson', data: EMPTY }, citygrid: { type: 'geojson', data: EMPTY }, citycur: { type: 'geojson', data: EMPTY },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#eadcb6' } },
@@ -109,9 +109,11 @@ function buildStyle() {
         layout: { 'text-field': ['coalesce', ['get', 'name:ja'], ['get', 'name']], 'text-font': ['Noto Sans Regular'],
           'text-size': ['interpolate', ['linear'], ['zoom'], 12, 12, 17, 17], 'text-max-width': 8 },
         paint: { 'text-color': '#5a3e1b', 'text-halo-color': 'rgba(255,244,216,.96)', 'text-halo-width': 1.8 } },
-      { id: 'road-bed', type: 'line', source: 'roads', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#7d5e34', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 3, 19, 15], 'line-opacity': 0.92 } },
-      { id: 'road-line', type: 'line', source: 'roads', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ecd8a8', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1.4, 19, 8.5] } },
-      { id: 'road-syn', type: 'line', source: 'roadsyn', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffc83d', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1.2, 19, 4.5], 'line-dasharray': [1, 1.7], 'line-blur': 0.6 } },
+      { id: 'city-flat', type: 'fill', source: 'cityflat', paint: { 'fill-color': ['get', 'c'], 'fill-opacity': ['get', 'o'] } },
+      { id: 'city-lane', type: 'line', source: 'citylane', paint: { 'line-color': '#f1e7b8', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 0.8, 19, 2.4], 'line-dasharray': [2, 2] } },
+      { id: 'city-grid', type: 'line', source: 'citygrid', paint: { 'line-color': ['case', ['==', ['get', 'b'], 1], 'rgba(255,255,255,.8)', 'rgba(255,216,115,.0)'], 'line-width': 1.4 } },
+      { id: 'city-cur', type: 'fill', source: 'citycur', paint: { 'fill-color': ['case', ['==', ['get', 'ok'], 1], '#ffd873', '#ff6b6b'], 'fill-opacity': 0.5 } },
+      { id: 'city-3d', type: 'fill-extrusion', source: 'city3d', paint: { 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-opacity': 0.97, 'fill-extrusion-vertical-gradient': true } },
       { id: 'trail-glow', type: 'line', source: 'trail', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#ffd873', 'line-width': 12, 'line-blur': 7, 'line-opacity': 0.7 } },
       { id: 'trail-dots', type: 'line', source: 'trail', layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -154,7 +156,7 @@ function animWater(t) {   // 水面の波をゆっくり流す
   try { map.setPaintProperty('water-wave-a', 'fill-translate', [(t / 60) % 32, (t / 130) % 32]); map.setPaintProperty('water-wave-b', 'fill-translate', [-(t / 85) % 32, (t / 100) % 32]); } catch (e) {}
 }
 function setSrc(id, data) { try { const s = map.getSource(id); if (s) s.setData(data); } catch (e) {} }
-map.on('load', () => { mapReady = true; if (isLite()) applyLite(); drawTrail(); showPlaceCircle(); });
+map.on('load', () => { mapReady = true; if (isLite()) applyLite(); drawTrail(); });
 // ベクター地図が読み込めないときは、簡易な画像の地図に切り替える
 setTimeout(() => {
   try {
@@ -634,8 +636,8 @@ const foundToday = () => Object.values(save.found).filter(f => f.date === todayS
 const DAILY_POOL = {
   walk: [{ id: 'walk1', name: '今日、1km歩く', goal: 1000, cur: () => save.today, gold: 60, shards: 1, xp: 200 }, { id: 'walk3', name: '今日、3km歩く', goal: 3000, cur: () => save.today, gold: 160, shards: 2, xp: 500 }],
   poi: [{ id: 'poi1', name: '名所を1つ発見する', goal: 1, cur: foundToday, gold: 60, shards: 1, xp: 200 }, { id: 'poi3', name: '名所を3つ発見する', goal: 3, cur: foundToday, gold: 200, shards: 2, xp: 600 }],
-  misc: [{ id: 'coin20', name: 'コインを20枚ひろう', goal: 20, cur: () => D().coins, gold: 50, shards: 0, xp: 150 }, { id: 'harvest', name: '置いた物から収穫する', goal: 1, cur: () => D().harvest, gold: 50, shards: 0, xp: 150 },
-    { id: 'build1', name: '何か1つつくる', goal: 1, cur: () => D().built, gold: 40, shards: 0, xp: 150 }, { id: 'evo1', name: '物を1回進化させる', goal: 1, cur: () => D().evo, gold: 80, shards: 1, xp: 250 }],
+  misc: [{ id: 'coin20', name: 'コインを20枚ひろう', goal: 20, cur: () => D().coins, gold: 50, shards: 0, xp: 150 }, { id: 'harvest', name: '街の税収を受け取る', goal: 1, cur: () => D().harvest, gold: 50, shards: 0, xp: 150 },
+    { id: 'build1', name: '街に5区画つくる', goal: 5, cur: () => D().built, gold: 40, shards: 0, xp: 150 }, { id: 'evo1', name: '街の区画を3回成長させる', goal: 3, cur: () => D().evo, gold: 80, shards: 1, xp: 250 }],
 };
 function todaysMissions() {
   let h = 0; for (const ch of todayStr()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;                  // 日付から決まる(その日は誰でも同じ)
@@ -676,29 +678,28 @@ const TITLES = [
   { id: 'city10', name: '町めぐり 見習い', desc: '10の市区町村を訪れる', ok: () => nCity() >= 10, gold: 60, shards: 1 },
   { id: 'city30', name: '町めぐり 達人', desc: '30の市区町村を訪れる', ok: () => nCity() >= 30, gold: 200, shards: 3 },
   { id: 'city100', name: '町めぐり 伝説', desc: '100の市区町村を訪れる', ok: () => nCity() >= 100, gold: 800, shards: 8 },
-  { id: 'pref3', name: '県めぐり ★', desc: '3つの都道府県を訪れる', ok: () => nPref() >= 3, gold: 100, shards: 2, unlock: '🗿 旅の記念碑' },
+  { id: 'pref3', name: '県めぐり ★', desc: '3つの都道府県を訪れる', ok: () => nPref() >= 3, gold: 100, shards: 2 },
   { id: 'pref10', name: '県めぐり ★★', desc: '10の都道府県を訪れる', ok: () => nPref() >= 10, gold: 300, shards: 5 },
   { id: 'pref20', name: '県めぐり ★★★', desc: '20の都道府県を訪れる', ok: () => nPref() >= 20, gold: 800, shards: 8 },
   { id: 'pref47', name: '日本一周', desc: '47都道府県をすべて訪れる', ok: () => nPref() >= 47, gold: 3000, shards: 30 },
   { id: 'lv10', name: 'Lv.10 到達', desc: 'レベル10になる', ok: () => curLevel() >= 10, gold: 300, shards: 3 },
   { id: 'lv20', name: 'Lv.20 到達', desc: 'レベル20になる', ok: () => curLevel() >= 20, gold: 800, shards: 8 },
   { id: 'lv30', name: 'Lv.30 到達', desc: 'レベル30になる', ok: () => curLevel() >= 30, gold: 2000, shards: 20 },
-  { id: 'build10', name: 'つくり手 見習い', desc: '物を10回つくる', ok: () => (save.stats.builds || 0) >= 10, gold: 100, shards: 1 },
-  { id: 'build50', name: 'つくり手 達人', desc: '物を50回つくる', ok: () => (save.stats.builds || 0) >= 50, gold: 300, shards: 3 },
-  { id: 'build100', name: 'つくり手 伝説', desc: '物を100回つくる', ok: () => (save.stats.builds || 0) >= 100, gold: 800, shards: 8 },
-  { id: 'dist1', name: '最初の地区', desc: '建物を3つ以上つなげて、地区をつくる', ok: () => districts.length >= 1, gold: 100, shards: 1 },
-  { id: 'dist3', name: '街の設計者', desc: '3つの地区をつくる', ok: () => districts.length >= 3, gold: 400, shards: 4 },
-  { id: 'dist16', name: '大都市の市長', desc: '1つの地区を16棟以上にする', ok: () => districts.some(d => d.list.length >= 16), gold: 800, shards: 8 },
-  { id: 'town5', name: '街づくり 見習い', desc: '建物を同時に5つ置く', ok: () => save.built.length >= 5, gold: 60, shards: 1 },
-  { id: 'town30', name: '街づくり 達人', desc: '建物を同時に30個置く', ok: () => save.built.length >= 30, gold: 300, shards: 3 },
-  { id: 'town100', name: '街づくり 伝説', desc: '建物を同時に100個置く', ok: () => save.built.length >= 100, gold: 900, shards: 8 },
-  { id: 'syn3', name: '相性ばつぐん', desc: '3種類の好きな相手に囲まれた建物をつくる', ok: () => [...synCache.values()].some(v => v.n >= 3), gold: 150, shards: 2 },
-  { id: 'syn4', name: '理想の街並み', desc: '4種類の好きな相手に囲まれた建物をつくる(最大ボーナス)', ok: () => [...synCache.values()].some(v => v.n >= 4), gold: 400, shards: 4 },
-  { id: 'allfam', name: '建築図鑑コンプリート', desc: 'すべての種類の建物を、1つずつ置く', ok: () => ITEMS.every(i => save.built.some(o => o.t === i.id)), gold: 1000, shards: 10 },
-  { id: 'star5', name: '名建築のオーナー', desc: '最高の姿(★★)の建物を5つ持つ', ok: () => save.built.filter(o => lvOf(o) >= 3).length >= 5, gold: 500, shards: 5 },
-  { id: 'evo5', name: '進化の使い手', desc: '物を5回進化させる', ok: () => (save.stats.evos || 0) >= 5, gold: 150, shards: 2 },
-  { id: 'evo20', name: '進化の名人', desc: '物を20回進化させる', ok: () => (save.stats.evos || 0) >= 20, gold: 500, shards: 5 },
-  { id: 'evo50', name: '進化の賢者', desc: '物を50回進化させる', ok: () => (save.stats.evos || 0) >= 50, gold: 1500, shards: 15 },
+  { id: 'build10', name: 'つくり手 見習い', desc: '区画を30回つくる', ok: () => (save.stats.builds || 0) >= 30, gold: 100, shards: 1 },
+  { id: 'build50', name: 'つくり手 達人', desc: '区画を200回つくる', ok: () => (save.stats.builds || 0) >= 200, gold: 300, shards: 3 },
+  { id: 'build100', name: 'つくり手 伝説', desc: '区画を800回つくる', ok: () => (save.stats.builds || 0) >= 800, gold: 800, shards: 8 },
+  { id: 'pop100', name: '村長', desc: '人口を100人にする', ok: () => cityStat.pop >= 100, gold: 100, shards: 1 },
+  { id: 'pop500', name: '町長', desc: '人口を500人にする', ok: () => cityStat.pop >= 500, gold: 250, shards: 2 },
+  { id: 'pop2000', name: '市長', desc: '人口を2,000人にする', ok: () => cityStat.pop >= 2000, gold: 600, shards: 5 },
+  { id: 'pop8000', name: '大都市の市長', desc: '人口を8,000人にする', ok: () => cityStat.pop >= 8000, gold: 1500, shards: 10 },
+  { id: 'happy', name: '住みよい街', desc: '人口200人以上で、住みやすさ110%以上', ok: () => cityStat.pop >= 200 && cityStat.hap >= 1.1, gold: 400, shards: 4 },
+  { id: 'fullsvc', name: 'フル装備の街', desc: '警察・消防・学校・病院・発電所をそろえる', ok: () => ['police', 'fire', 'school', 'hospital', 'power'].every(k => (cityStat.counts[k] || 0) >= 1), gold: 300, shards: 3 },
+  { id: 'skyline', name: 'ビル街のオーナー', desc: '高層に育った区画を10個にする', ok: () => cityStat.lv3 >= 10, gold: 500, shards: 5 },
+  { id: 'arena', name: 'スタジアムのある街', desc: 'スタジアムをつくる', ok: () => (cityStat.counts.stadium || 0) >= 1, gold: 300, shards: 3 },
+  { id: 'tax10k', name: '税収王', desc: '税収を合計10,000🪙受け取る', ok: () => (save.city && save.city.total || 0) >= 10000, gold: 600, shards: 6 },
+  { id: 'evo5', name: '成長の見守り手', desc: '街の区画を30回成長させる', ok: () => (save.stats.evos || 0) >= 30, gold: 150, shards: 2 },
+  { id: 'evo20', name: '成長の名人', desc: '街の区画を200回成長させる', ok: () => (save.stats.evos || 0) >= 200, gold: 500, shards: 5 },
+  { id: 'evo50', name: '成長の賢者', desc: '街の区画を1000回成長させる', ok: () => (save.stats.evos || 0) >= 1000, gold: 1500, shards: 15 },
   { id: 'kinds5', name: '名所めぐり 5種', desc: '5種類の名所を発見する', ok: () => new Set(Object.values(save.found).map(f => f.k)).size >= 5, gold: 120, shards: 2 },
   { id: 'kinds10', name: '名所めぐり 10種', desc: '10種類の名所を発見する', ok: () => new Set(Object.values(save.found).map(f => f.k)).size >= 10, gold: 300, shards: 4 },
   { id: 'kinds15', name: '名所コンプリート', desc: '15種類すべての名所を発見する', ok: () => new Set(Object.values(save.found).map(f => f.k)).size >= 15, gold: 800, shards: 8 },
@@ -721,7 +722,7 @@ const TITLES = [
   { id: 'total10', name: 'さんぽ 10km', desc: '合計10km歩く', ok: () => save.total >= 10000, gold: 100, shards: 1 },
   { id: 'total100', name: 'さんぽ 100km', desc: '合計100km歩く', ok: () => save.total >= 100000, gold: 500, shards: 5 },
   { id: 'total1000', name: 'さんぽ 1000km', desc: '合計1000km歩く', ok: () => save.total >= 1000000, gold: 2500, shards: 25 },
-  ...AREAS.map(a => ({ id: 'area-' + a[0], name: a[1] + '制覇', desc: a[1] === '北海道' ? '北海道を訪れる' : `${a[1]}の${a[2].length}都道府県をすべて訪れる`, ok: () => areaDone(a), gold: 500, shards: 5, unlock: '🌈 虹のアーチ(最初の地方制覇で解放)', area: a })),
+  ...AREAS.map(a => ({ id: 'area-' + a[0], name: a[1] + '制覇', desc: a[1] === '北海道' ? '北海道を訪れる' : `${a[1]}の${a[2].length}都道府県をすべて訪れる`, ok: () => areaDone(a), gold: 500, shards: 5, area: a })),
 ];
 function checkTitles() {
   let delay = 0;
@@ -784,7 +785,7 @@ function updateLevel() {
   if (lv > save.lvDone) {
     const from = save.lvDone; let gold = 0, shards = 0;
     for (let n = from + 1; n <= lv; n++) { gold += 30 + 20 * (n + 1); shards += 1 + ((n + 1) % 5 === 0 ? 3 : 0); }
-    const opened = ITEMS.filter(i => i.minLv && i.minLv > from + 1 && i.minLv <= lv + 1).map(i => i.chain[0][1]);
+    const opened = cityUnlocks(from, lv);
     save.lvDone = lv;
     setTimeout(() => {
       celebrate('🎖️', `レベルアップ！ Lv.${lv + 1} ${lvName(lv)}`);
@@ -876,12 +877,9 @@ function maintainCoins() {
     if (gone) removeCoinMarker(c.id);
     return !gone;
   });
-  const mg = save.built.filter(o => ITEM[o.t].magnet && dist(o, me) < 450);
-  const power = mg.reduce((s, o) => s + ITEM[o.t].magnet * MAGNET_LV[lvOf(o) - 1], 0);
-  const targetN = COIN_COUNT + Math.min(10, Math.floor(power * 2));
+  const targetN = COIN_COUNT + cityCoinBonus();
   while (save.coins.length < targetN) {
-    const q = mg.length && Math.random() < Math.min(0.7, 0.25 * power)
-      ? randomNear(mg[Math.floor(Math.random() * mg.length)], 15, 110) : randomNear(me, 30, 220);
+    const q = randomNear(me, 30, 220);
     const r = Math.random();
     const c = { id: now + '-' + Math.random().toString(36).slice(2, 7), lat: q.lat, lng: q.lng,
       k: r > 0.94 ? 'shard' : undefined, v: r < 0.05 ? 10 : r < 0.25 ? 3 : 1, exp: now + COIN_TTL * (0.5 + Math.random()) };
@@ -894,7 +892,7 @@ function pickCoins(accuracy) {
     if (dist(c, me) > range) continue;
     save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id);
     if (c.k === 'shard') { addShard(1); addXp(10); continue; }
-    const luck = Math.min(0.9, save.built.filter(o => ITEM[o.t].lucky && dist(o, c) <= 200).reduce((s, o) => s + 0.15 * lvOf(o), 0));
+    const luck = cityLuck(c);
     if (Math.random() < luck) { floatText('🍀ご利益 2倍！'); addGold(c.v * 2); } else addGold(c.v);
     D().coins += c.v; addXp(c.v);
   }
@@ -910,246 +908,6 @@ function addGold(n) {
   save.gold += n; updateWallet();
   floatText((n > 0 ? '+' : '') + n + '🪙');
   if (n > 0) try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
-}
-
-// ---- つくる ----
-// どのオブジェクトもコインを生産し、進化する
-const LV_RATE = [1, 2.2, 4.5];     // 進化ごとの収穫倍率
-const HARVEST_CAP_H = 8;           // 何時間分までためられるか
-const ITEMS = [
-  { id: 'flower', cost: 5, rate: 1.5, role: '花が咲いて、コインが実る', chain: [['🌸', '花畑'], ['🌷', 'チューリップ畑'], ['🌻', 'ひまわり畑']] },
-  { id: 'tree', cost: 10, rate: 3, role: '実をつけて、コインに変わる', chain: [['🌳', '木'], ['🌲', '大樹'], ['🎄', '聖なる樹']] },
-  { id: 'rest', cost: 15, rate: 2, role: '休憩所。立ち寄るとコインがたまる', chain: [['🪑', 'ベンチ'], ['⛺', 'テント'], ['🏕️', 'キャンプ場']] },
-  { id: 'lantern', cost: 20, rate: 1, magnet: 1, role: '灯りにコインが集まってくる', chain: [['🏮', 'ちょうちん'], ['🪔', 'ランプ'], ['🌟', 'ほしの灯']] },
-  { id: 'fountain', cost: 50, rate: 5, role: '湧き出るコインをためる', chain: [['💧', '小さな池'], ['⛲', '噴水'], ['🧜', '人魚の泉']] },
-  { id: 'shrine', cost: 60, rate: 2, lucky: 1, role: 'ご利益で、近くのコインが2倍になることがある', chain: [['⛩️', 'ちいさなほこら'], ['🦊', 'きつねの社'], ['🐉', 'りゅうの社']] },
-  { id: 'house', cost: 80, rate: 8, role: '家賃がたまる', chain: [['🏠', 'おうち'], ['🏡', '庭つきの家'], ['🏘️', '小さな村']] },
-  { id: 'tower', cost: 150, rate: 3, magnet: 2, role: '遠くからコインを呼び寄せる', chain: [['🗼', 'ひかりの塔'], ['🔭', '星見の塔'], ['🛸', '天空港']] },
-  { id: 'monument', cost: 40, rate: 4, role: '旅の記念。立ち寄るとコインがたまる', locked: () => !save.titles.pref3, lockText: '「県めぐり ★」(3都道府県を訪れる)で解放', chain: [['🗿', '石碑'], ['🗿', '記念碑'], ['🏆', '黄金像']] },
-  { id: 'rainbow', cost: 100, rate: 6, role: '虹の根元にコインがたまる', locked: () => !Object.keys(save.titles).some(k => k.startsWith('area-')), lockText: '最初の「地方制覇」で解放', chain: [['🌈', '小さな虹'], ['🌈', '大きな虹'], ['🌈', '七色のアーチ']] },
-  { id: 'farm', cost: 25, rate: 2.5, minLv: 3, role: '作物が育って、コインに変わる', chain: [['🥕', '畑'], ['🍎', '果樹園'], ['🌾', '黄金の畑']] },
-  { id: 'ranch', cost: 90, rate: 7, minLv: 5, role: '動物たちが、コインを運んでくる', chain: [['🐔', 'ニワトリ小屋'], ['🐄', '牧場'], ['🐑', 'ふれあい牧場']] },
-  { id: 'windmill', cost: 130, rate: 6, minLv: 7, role: '風を受けて、コインを回す', chain: [['🌬️', '風車'], ['🌬️', '大きな風車'], ['🌷', '風車の丘']] },
-  { id: 'lighthouse', cost: 220, rate: 5, magnet: 2, minLv: 10, role: '遠くのコインを、光で呼び寄せる', chain: [['🗼', '灯台'], ['🗼', '高い灯台'], ['🌟', '大灯台']] },
-  { id: 'funfair', cost: 420, rate: 28, minLv: 14, role: 'にぎわいが、たくさんのコインを生む', chain: [['🎠', 'メリーゴーランド'], ['🎡', '観覧車'], ['🎪', '遊園地']] },
-  { id: 'market', cost: 60, rate: 5, minLv: 4, role: '品物がならんで、コインが入る', chain: [['🧺', '屋台'], ['🏪', 'お店'], ['🏬', 'デパート']] },
-  { id: 'onsen', cost: 110, rate: 7, minLv: 6, role: '湯けむりに、ひとが集まる', chain: [['♨️', '湯けむり'], ['🛁', '露天風呂'], ['🏨', '温泉旅館']] },
-  { id: 'library', cost: 120, rate: 6, minLv: 8, role: '本がふえるほど、にぎわう', chain: [['📚', '本だな'], ['📖', '図書館'], ['🏛️', '大図書館']] },
-  { id: 'harbor', cost: 160, rate: 9, minLv: 9, role: '船が荷物と、コインを運ぶ', chain: [['⛵', '小舟'], ['⚓', '船着き場'], ['🚢', '大きな港']] },
-  { id: 'observatory', cost: 240, rate: 8, minLv: 12, role: '星を見に、ひとが集まる', chain: [['🔭', '望遠鏡'], ['🌌', '天文台'], ['🚀', '宇宙センター']] },
-  { id: 'castle', cost: 300, rate: 20, role: '税収がたっぷりたまる', chain: [['🏰', 'おしろ'], ['🏯', '大きなおしろ'], ['👑', '王国']] },
-];
-ITEMS.forEach(i => { if (i.minLv && !i.locked) { i.locked = () => curLevel() < i.minLv; i.lockText = `Lv.${i.minLv} で解放`; } });
-const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
-const ITEM_ORDER = ITEMS.map(i => i.id);
-// 相性: 近く(70m以内)に「好きな相手」がいると、収穫が増える(種類ごとに+15%、最大+60%)
-const LIKES = { flower: ['tree', 'fountain', 'house'], tree: ['flower', 'rest', 'ranch'], rest: ['tree', 'fountain', 'lantern', 'market'], lantern: ['shrine', 'rest', 'house', 'market'],
-  fountain: ['flower', 'rest', 'castle', 'library'], shrine: ['lantern', 'tree', 'monument', 'onsen'], house: ['flower', 'farm', 'market', 'lantern'], tower: ['castle', 'observatory', 'lighthouse', 'funfair'],
-  monument: ['shrine', 'tower', 'library', 'rainbow'], rainbow: ['fountain', 'flower', 'windmill'], farm: ['ranch', 'windmill', 'house', 'market'], ranch: ['farm', 'tree', 'windmill'],
-  windmill: ['farm', 'ranch', 'rainbow'], lighthouse: ['harbor', 'tower', 'market'], funfair: ['market', 'tower', 'castle'], castle: ['tower', 'fountain', 'library', 'funfair'],
-  market: ['house', 'funfair', 'harbor', 'farm'], onsen: ['shrine', 'tree', 'rest', 'house'], library: ['fountain', 'monument', 'castle', 'observatory'], harbor: ['lighthouse', 'market', 'house'], observatory: ['tower', 'library', 'lantern'] };
-const SYN_RANGE = 70, SYN_STEP = 0.15, SYN_MAX = 4, LINK_RANGE = 90;
-const synCache = new Map(), distMulCache = new Map();
-let districts = [], roadsLine = EMPTY, roadsSyn = EMPTY;
-const DIST_TIERS = [[16, 0.25], [10, 0.15], [6, 0.10], [3, 0.05]];          // 地区(つながった建物の集まり)の大きさによるボーナス
-const distTier = n => (DIST_TIERS.find(t => n >= t[0]) || [0, 0])[1];
-function recalcSyn() {
-  synCache.clear(); distMulCache.clear();
-  const B = save.built, n = B.length, edges = [], synEdges = [];
-  for (let a = 0; a < n; a++) {
-    const o = B[a], likes = LIKES[o.t] || [], got = new Set();
-    for (let b = 0; b < n; b++) {
-      if (a === b) continue;
-      const q = B[b], d = dist(o, q);
-      if (likes.includes(q.t) && d <= SYN_RANGE) got.add(q.t);
-      if (b > a && d <= LINK_RANGE) edges.push([d, a, b]);
-      if (b > a && d <= SYN_RANGE && (likes.includes(q.t) || (LIKES[q.t] || []).includes(o.t))) synEdges.push([a, b]);
-    }
-    synCache.set(o.id, { n: Math.min(SYN_MAX, got.size), types: [...got] });
-  }
-  // 道: 近い建物どうしを、いちばん短い道でつなぐ(最小全域木)。つながった集まりが「地区」
-  const par = B.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
-  const segs = []; edges.sort((x, y) => x[0] - y[0]);
-  for (const [, a, b] of edges) { const ra = find(a), rb = find(b); if (ra !== rb) { par[ra] = rb; segs.push([[B[a].lng, B[a].lat], [B[b].lng, B[b].lat]]); } }
-  const comp = new Map(); B.forEach((o, i) => { const r = find(i); if (!comp.has(r)) comp.set(r, []); comp.get(r).push(o); });
-  districts = [];
-  for (const list of comp.values()) {
-    if (list.length < 3) continue;
-    const types = new Set(list.map(o => o.t)), bonus = distTier(list.length) + 0.02 * Math.min(10, types.size);
-    const c = { lat: list.reduce((s, o) => s + o.lat, 0) / list.length, lng: list.reduce((s, o) => s + o.lng, 0) / list.length };
-    const names = {}; list.forEach(o => { if (o.dn) names[o.dn] = (names[o.dn] || 0) + 1; });
-    const named = Object.entries(names).sort((x, y) => y[1] - x[1])[0];
-    const d = { key: list.map(o => o.id).sort()[0], list, c, types: types.size, bonus, name: named ? named[0] : autoDistrictName(c) };
-    districts.push(d); list.forEach(o => distMulCache.set(o.id, 1 + bonus));
-  }
-  roadsLine = { type: 'FeatureCollection', features: segs.map(s => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: s }, properties: {} })) };
-  roadsSyn = { type: 'FeatureCollection', features: synEdges.map(([a, b]) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[B[a].lng, B[a].lat], [B[b].lng, B[b].lat]] }, properties: {} })) };
-  drawRoads();
-}
-function autoDistrictName(c) {
-  let best = null, bd = 400;
-  for (const f of Object.values(save.found)) { if (f.lat == null) continue; const d = dist(c, f); if (d < bd) { bd = d; best = f; } }
-  if (best) return best.name + '地区';
-  const cr = Object.values(save.regions.city).find(r => r.at && dist(c, r.at) < 3000);
-  return cr ? cr.city + 'の街' : '名もなき街';
-}
-function drawRoads() { const hide = (save.bview || 'auto') === 'hide'; setSrc('roads', hide ? EMPTY : roadsLine); setSrc('roadsyn', hide ? EMPTY : roadsSyn); }
-const synMul = o => 1 + SYN_STEP * ((synCache.get(o.id) || { n: 0 }).n);
-const lvOf = o => o.lv || 1;
-const face = o => ITEM[o.t].chain[lvOf(o) - 1];                 // [絵文字, 名前]
-const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1] * synMul(o) * (distMulCache.get(o.id) || 1);
-const evoCost = o => ITEM[o.t].cost * (lvOf(o) === 1 ? 2 : 4);
-const accrued = o => Math.min(HARVEST_CAP_H, (Date.now() - o.last) / 3600e3) * rateOf(o);
-const BUILD_RANGE = 40, MAX_BUILT = 300, SHARD_PRICE = 60;
-const SIZE = { market: 56, onsen: 58, library: 60, harbor: 64, observatory: 62, farm: 54, ranch: 60, windmill: 62, lighthouse: 70, funfair: 72, monument: 56, rainbow: 66, flower: 46, tree: 56, rest: 50, lantern: 50, fountain: 58, shrine: 60, house: 62, tower: 68, castle: 72 };   // イラストの大きさ(px)
-const builtMarkers = new Map();
-let placing = null;
-
-const builtHtml = o => {
-  const lv = lvOf(o), sz = (SIZE[o.t] || 52) + (lv - 1) * 6;
-  return `<div class="obj"><span class="sp">${ART.item(o.t, lv, sz)}</span><div class="base"></div>${lv > 1 ? `<i class="st">${'★'.repeat(lv - 1)}</i>` : ''}</div>`;
-};
-function addBuiltMarker(o, fresh) {
-  const m = addPin(o, '', builtHtml(o), () => openObj(o));
-  const el = m.getElement(); el.classList.toggle('ready', accrued(o) >= 8);
-  if (fresh) el.firstChild.classList.add('fresh');
-  builtMarkers.set(o.id, m);
-}
-function refreshBuilt() {
-  for (const o of save.built) { const m = builtMarkers.get(o.id); if (!m) continue; const el = m.getElement(); el.innerHTML = builtHtml(o); el.classList.toggle('ready', accrued(o) >= 8); }
-  reclusterBuilt();
-}
-// 建物が増えて見にくいとき: 近い建物を「まとめバッジ」にする(地図を拡大するとほどける)。表示は「まとめる / すべて / かくす」から選べる
-const CLUSTER_PX = 58;
-let clusterMarkers = [];
-const worldXY = (o, z) => { const sc = 512 * Math.pow(2, z); return [(o.lng + 180) / 360 * sc, (0.5 - Math.log(Math.tan(Math.PI / 4 + o.lat * RAD / 2)) / (2 * Math.PI)) * sc]; };
-function reclusterBuilt() {
-  clusterMarkers.forEach(m => m.remove()); clusterMarkers = []; drawRoads();
-  const mode = save.bview || 'auto', z = map.getZoom(), groups = [];
-  for (const o of save.built) {
-    const m = builtMarkers.get(o.id); if (!m) continue;
-    if (mode === 'hide') { m.getElement().style.display = 'none'; continue; }
-    if (mode === 'all') { m.getElement().style.display = ''; continue; }
-    const [x, y] = worldXY(o, z);
-    let gr = null, bd = CLUSTER_PX * 0.8;                       // 近い建物は、同じグループへ(地図を動かしても、まとまり方は変わらない)
-    for (const q of groups) { const d = Math.hypot(q.x - x, q.y - y); if (d < bd) { bd = d; gr = q; } }
-    if (gr) { gr.list.push(o); gr.x += (x - gr.x) / gr.list.length; gr.y += (y - gr.y) / gr.list.length; } else groups.push({ x, y, list: [o] });
-  }
-  for (const { list } of groups) {
-    if (list.length === 1) { builtMarkers.get(list[0].id).getElement().style.display = ''; continue; }
-    list.forEach(o => { builtMarkers.get(o.id).getElement().style.display = 'none'; });
-    const c = { lat: list.reduce((s, o) => s + o.lat, 0) / list.length, lng: list.reduce((s, o) => s + o.lng, 0) / list.length };
-    const best = list.reduce((a, b) => (lvOf(b) > lvOf(a) || (lvOf(b) === lvOf(a) && ITEM[b.t].cost > ITEM[a.t].cost)) ? b : a);
-    const ready = list.some(o => accrued(o) >= 8);
-    clusterMarkers.push(addPin(c, 'clump', `<div class="clu"><span class="sp">${ART.item(best.t, lvOf(best), 46)}</span><i class="n">×${list.length}</i>${ready ? '<i class="rd">🪙</i>' : ''}<div class="base"></div></div>`, () => openCluster(list)));
-  }
-}
-function openCluster(list) {
-  if (map.getZoom() < 18.2) {
-    const b = new maplibregl.LngLatBounds(); list.forEach(o => b.extend([o.lng, o.lat]));
-    follow = false; map.fitBounds(b, { padding: 110, maxZoom: 19.2, duration: 600 }); return;
-  }
-  const rate = list.reduce((s, o) => s + rateOf(o), 0);
-  $('obj-title').innerHTML = `<span class="ic">🏘️</span>まとまっている建物 (${list.length})`;
-  $('obj-sub').innerHTML = `<div>合計 1時間に ${rate.toFixed(1)}🪙</div><div class="clist">${list.map(o => `<button data-b="${o.id}"><b>${ART.item(o.t, lvOf(o), 30)}</b>${esc(face(o)[1])} ${'★'.repeat(lvOf(o) - 1)}<small>${Math.floor(accrued(o))}🪙</small></button>`).join('')}</div>`;
-  $('obj-evo').hidden = true; $('obj-del').hidden = true;
-  $('obj-sub').querySelectorAll('button[data-b]').forEach(b => b.onclick = () => openObj(save.built.find(o => o.id === b.dataset.b)));
-  $('obj').hidden = false;
-}
-map.on('zoomend', reclusterBuilt);
-setInterval(refreshBuilt, 60000);
-
-function openBuildMenu() {
-  $('build-gold').textContent = '🪙 ' + save.gold + ' ・ ' + save.built.length + '/' + MAX_BUILT;
-  $('bview').innerHTML = '表示: ' + [['auto', '🏘️ まとめる'], ['all', '👁️ すべて'], ['hide', '🙈 かくす']].map(([v, l]) => `<button data-v="${v}" class="${(save.bview || 'auto') === v ? 'on' : ''}">${l}</button>`).join('');
-  $('bview').querySelectorAll('button').forEach(b => b.onclick = () => { save.bview = b.dataset.v; persist(); reclusterBuilt(); openBuildMenu(); });
-  $('build-list').innerHTML = ITEMS.map(i =>
-    `<button data-id="${i.id}" ${(i.locked && i.locked()) || save.gold < i.cost ? 'disabled' : ''}><b>${ART.item(i.id, 1, 52)}</b>${i.chain[0][1]}` +
-    (i.locked && i.locked() ? `<small>🔒 ${i.lockText}</small>` : `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><span class="mini">${[1, 2, 3].map(l => ART.item(i.id, l, 22)).join('')}</span><small class="likes">😊 ${(LIKES[i.id] || []).map(t => ART.item(t, 1, 16)).join('')}</small>`) + `</button>`).join('') +
-    `<button id="buy-shard" ${save.gold < SHARD_PRICE ? 'disabled' : ''}><b>${ART.coin('shard', 52)}</b>進化のかけら<small>${SHARD_PRICE}🪙</small><small>所持 ${save.shards}</small></button>`;
-  $('build-list').querySelectorAll('button[data-id]').forEach(b => b.onclick = () => startPlacing(ITEM[b.dataset.id]));
-  $('buy-shard').onclick = () => { if (save.gold < SHARD_PRICE) return; addGold(-SHARD_PRICE); addShard(1); persist(); openBuildMenu(); };
-  $('build').hidden = false;
-}
-function circlePoly(c, r) {
-  const pts = [];
-  for (let k = 0; k <= 64; k++) { const th = k / 64 * 2 * Math.PI; pts.push([c.lng + r * Math.sin(th) / (111320 * Math.cos(c.lat * RAD)), c.lat + r * Math.cos(th) / 111320]); }
-  return { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [pts] }, properties: {} }] };
-}
-function showPlaceCircle() { setSrc('place', placing && me ? circlePoly(me, BUILD_RANGE) : EMPTY); }
-function startPlacing(it) {
-  if (!me) return toast('現在地を取得してからつくれます');
-  if (it.locked && it.locked()) return toast('🔒 ' + it.lockText);
-  placing = it; $('build').hidden = true;
-  $('place-text').textContent = `${it.chain[0][0]} ${it.chain[0][1]}(${it.cost}🪙)を置く場所をタップ — 円の中だけ置けます`;
-  $('placebar').hidden = false; showPlaceCircle();
-}
-function stopPlacing() { placing = null; $('placebar').hidden = true; showPlaceCircle(); }
-function placeAt(ll) {
-  if (!placing || !me) return;
-  if (dist(ll, me) > BUILD_RANGE) return toast(`遠すぎます。あなたの周り${BUILD_RANGE}m以内に置こう`);
-  if (save.built.length >= MAX_BUILT) return toast('これ以上は置けません');
-  if (save.gold < placing.cost) return toast('コインが足りません');
-  const it = placing;
-  const o = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), t: it.id, lat: ll.lat, lng: ll.lng, d: todayStr(),
-    lv: 1, last: Date.now(), days: 1, lastDay: todayStr(), spent: it.cost };
-  save.built.push(o); addBuiltMarker(o, true); recalcSyn(); reclusterBuilt(); addGold(-it.cost);
-  save.stats.builds = (save.stats.builds || 0) + 1; D().built++; addXp(it.cost / 2); checkDaily();
-  toast(`${face(o)[0]} ${face(o)[1]}をつくった！\n歩いて通うと育って、進化します`); stopPlacing(); persist(); updateHud();
-}
-// 近くに行くと、たまったコインを収穫する
-function visitBuilt() {
-  let got = 0; const parts = [];
-  for (const o of save.built) {
-    if (dist(o, me) > COIN_RANGE) continue;
-    const a = accrued(o);
-    if (a >= 1) { const n = Math.floor(a); o.last = Date.now() - (a - n) / rateOf(o) * 3600e3; got += n; parts.push(`${face(o)[0]}+${n}`); }
-  }
-  if (got) { D().harvest++; addXp(got / 4); }
-  if (parts.length) { if (got) addGold(got); toast('🌾 ' + parts.join('  ')); refreshBuilt(); }
-}
-// 進化: 「進化のかけら」と「コイン」が必要(場所は問わない)
-const EVO_SHARDS = [0, 1, 2];   // Lv1→2は1個、Lv2→3は2個
-function evolveCheck(o) {
-  const lv = lvOf(o);
-  if (lv >= 3) return { ok: false, why: '最高の姿です' };
-  if (save.shards < EVO_SHARDS[lv]) return { ok: false, why: `🔮かけらが足りません (必要${EVO_SHARDS[lv]} / 所持${save.shards})` };
-  if (save.gold < evoCost(o)) return { ok: false, why: `コインが足りません (${evoCost(o)}🪙)` };
-  return { ok: true };
-}
-function openObj(o) {
-  if (placing) return;
-  const it = ITEM[o.t], lv = lvOf(o), refund = Math.floor(o.spent / 2);
-  $('obj-title').innerHTML = `<span class="ic">${ART.item(o.t, lv, 44)}</span>${esc(face(o)[1])} ${'★'.repeat(lv - 1)}`;
-  let html = `<div>${it.role}</div><div>収穫: 1時間に ${rateOf(o).toFixed(1)}🪙 (最大${HARVEST_CAP_H}時間分)<br>たまっているコイン: <b>${Math.floor(accrued(o))}🪙</b>` +
-    `<br>つくった日: ${o.d}</div>`;
-  const sy = synCache.get(o.id) || { n: 0, types: [] }, likes = LIKES[o.t] || [];
-  html += `<div>😊 相性(70m以内): ${sy.n ? `<b>+${Math.round(sy.n * SYN_STEP * 100)}%</b> ` + sy.types.map(t => ITEM[t].chain[0][1]).join('・') : 'なし'}<br><small>好きな相手: ${likes.map(t => `<span class="lk ${sy.types.includes(t) ? 'on' : ''}">${ART.item(t, 1, 20)}</span>`).join('')} 種類ごとに+${Math.round(SYN_STEP * 100)}%(最大+${Math.round(SYN_STEP * SYN_MAX * 100)}%)</small></div>`;
-  const dd = districts.find(d => d.list.includes(o));
-  html += dd ? `<div>🏘️ <b>${esc(dd.name)}</b> (${dd.list.length}棟・${dd.types}種類) 地区ボーナス <b>+${Math.round(dd.bonus * 100)}%</b></div>` : `<div><small>🛤️ 90m以内に建物を3つ以上つなげると「地区」になり、棟数と種類に応じて収穫が増えます</small></div>`;
-  if (it.magnet) html += `<div>🧲 近くにコインを呼ぶ力あり</div>`;
-  if (it.lucky) html += `<div>🍀 近くのコインが2倍になることがある</div>`;
-  if (lv < 3) html += `<div>進化先: ${it.chain[lv][0]} ${it.chain[lv][1]}<br>必要: 🔮×${EVO_SHARDS[lv]} ＋ 🪙${evoCost(o)}</div>`;
-  $('obj-sub').innerHTML = html;
-  const ev = evolveCheck(o), eb = $('obj-evo');
-  $('obj-del').hidden = false; eb.hidden = lv >= 3; eb.disabled = !ev.ok; eb.textContent = ev.ok ? `進化させる (🔮×${EVO_SHARDS[lv]} ＋ ${evoCost(o)}🪙)` : ev.why;
-  eb.onclick = () => {
-    if (!evolveCheck(o).ok) return;
-    const cost = evoCost(o); addGold(-cost); addShard(-EVO_SHARDS[lv]); o.spent += cost; o.lv = lv + 1;
-    save.stats.evos = (save.stats.evos || 0) + 1; D().evo++; addXp(cost / 2); checkDaily();
-    refreshBuilt(); celebrate(ART.item(o.t, o.lv, 104), `${face(o)[1]}に進化！`); persist(); updateHud(); $('obj').hidden = true;
-  };
-  $('obj-del').textContent = `とりこわす (+${refund}🪙)`;
-  $('obj-del').onclick = () => {
-    const m = builtMarkers.get(o.id); if (m) m.remove(); builtMarkers.delete(o.id);
-    save.built.splice(save.built.indexOf(o), 1); recalcSyn(); reclusterBuilt(); addGold(refund); persist(); updateHud(); $('obj').hidden = true;
-  };
-  $('obj').hidden = false;
-}
-// 以前の保存データを新しい形式へ
-for (const o of save.built) {
-  if (o.t === 'bench') o.t = 'rest'; else if (o.t === 'tent') { o.t = 'rest'; o.lv = 2; }
-  o.lv = o.lv || 1; o.last = o.last || Date.now(); o.days = o.days || 1; o.lastDay = o.lastDay || o.d; o.spent = o.spent || ITEM[o.t].cost;
 }
 
 // ---- 冒険モード: 歩いて貯めた👣を使って、いつでも・どこでも冒険する ----
@@ -1590,8 +1348,8 @@ $('imp-paste-go').onclick = async () => {        // ファイルが選べない�
 map.on('dragstart', () => { follow = false; });
 map.on('click', e => {
   const ll = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+  if (cityMode) return;
   if (placingGate) return placeGateAt(ll);
-  if (placing) return placeAt(ll);
   if (mode === 'adventure') return advGo(ll);
   if (debug) updatePosition(ll.lat, ll.lng, 0);
 });
@@ -1602,11 +1360,10 @@ $('btn-debug').onclick = () => {
   if (debug && !me) updatePosition(START.lat, START.lng, 0);
   if (!debug) $('status').textContent = '位置情報を取得中…';
 };
-$('btn-build').onclick = openBuildMenu;
-$('build-close').onclick = () => { $('build').hidden = true; };
+$('btn-build').onclick = openCity;
 $('obj-close').onclick = () => { $('obj').hidden = true; };
-$('place-cancel').onclick = () => { stopPlacing(); stopPlacingGate(); };
-$('place-here').onclick = () => placingGate ? placeGateAt(me) : placeAt(me);
+$('place-cancel').onclick = stopPlacingGate;
+$('place-here').onclick = () => placeGateAt(me);
 let bookTab = 'region', bookFresh = true;
 function citySummary(c, n) {          // [進み具合%, 星, 「発見/総数」]
   if (!c || !c.total) return [0, c && c.tier ? ' ' + tierStars(c.tier) : '', ''];
@@ -1624,24 +1381,6 @@ function japanMapHtml(items) {
     `<svg class="jp" viewBox="0 0 ${M.w} ${M.h}" xmlns="http://www.w3.org/2000/svg"><rect width="${M.w}" height="${M.h}" rx="14" fill="#cfe8ee"/>` +
     `<rect x="${M.inset[0]}" y="${M.inset[1]}" width="${M.inset[2]}" height="${M.inset[3]}" rx="6" fill="none" stroke="#8fb5be" stroke-dasharray="4 3"/>${paths}${marks}</svg>` +
     `<div class="jp-note small">県をタップすると詳しく見られます(数字は発見した名所の数)・金色の縁は制覇した地方<br>地図データ: 国土地理院 地球地図日本(2016)</div>`;
-}
-function townHtml() {
-  if (!save.built.length) return '<div class="empty">まだ何もつくっていません。🔨で建物を置こう！</div>';
-  if (!districts.length) return '<div class="empty">🛤️ 90m以内に建物を3つ以上つなげると「地区」になります。<br>道でつながり、収穫ボーナスがつきます。</div>';
-  const list = [...districts].sort((a, b) => b.list.length - a.list.length);
-  return `<div class="jp-note small">地区ボーナス: 3棟+5% / 6棟+10% / 10棟+15% / 16棟+25% ＋ 種類ごとに+2%(最大+20%)</div><ul>` + list.map(d => {
-    const rate = d.list.reduce((s, o) => s + rateOf(o), 0), best = d.list.reduce((a, b) => (lvOf(b) > lvOf(a) ? b : a));
-    return `<li data-town="${d.key}" style="cursor:default"><span class="ic">${ART.item(best.t, lvOf(best), 34)}</span><div><b>${esc(d.name)}</b><small>${d.list.length}棟・${d.types}種類 ・ ボーナス +${Math.round(d.bonus * 100)}% ・ 1時間に ${rate.toFixed(1)}🪙</small>` +
-      `<span class="tbtn"><button data-go="${d.key}">📍 行く</button><button data-rn="${d.key}">✏️ 名前</button></span></div></li>`;
-  }).join('') + '</ul>';
-}
-function wireTown() {
-  const get = k => districts.find(d => d.key === k);
-  $('book-body').querySelectorAll('button[data-go]').forEach(b => b.onclick = () => { const d = get(b.dataset.go); if (!d) return; $('book').hidden = true; follow = false; map.flyTo({ center: [d.c.lng, d.c.lat], zoom: 17.2, pitch: CAM.pitch, duration: 1600 }); });
-  $('book-body').querySelectorAll('button[data-rn]').forEach(b => b.onclick = () => {
-    const d = get(b.dataset.rn); if (!d) return; const nm = prompt('この地区の名前', d.name); if (nm == null) return;
-    const t = nm.trim().slice(0, 14); d.list.forEach(o => { if (t) o.dn = t; else delete o.dn; }); recalcSyn(); persist(); renderBook();
-  });
 }
 function titlesHtml() {
   return '<ul>' + TITLES.map(t => {
@@ -1735,11 +1474,10 @@ function updatePosition(lat, lng, accuracy, virtual) {
       last = { p: ll, t: now };
     }
   }
-  revealAround(ll); maintainCoins(); pickCoins(accuracy); visitBuilt(); maybeFetchPois(); checkFound(); maybeRegionVisit(); updateHint(); persistSoon(); updateHud();
+  revealAround(ll); maintainCoins(); pickCoins(accuracy); maybeFetchPois(); checkFound(); maybeRegionVisit(); updateHint(); persistSoon(); updateHud();
   if (now - weather.at > 30 * 60e3) fetchWeather();
   checkDaily();
   if (now - (updatePosition.titleAt || 0) > 15000) { updatePosition.titleAt = now; checkTitles(); }
-  if (placing) showPlaceCircle();
   updateWallet();
   $('status').textContent = (debug ? 'テスト移動中(地図タップで移動)' : virtual ? `冒険モード 👣${Math.floor(save.ap)} ・ 地図をタップして移動` : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`) + (wxText() ? '  ' + wxText() : '');
 }
@@ -1757,9 +1495,6 @@ else {
   setTimeout(() => startPreview('位置情報の取得に時間がかかっています'), 8000);
 }
 save.coins.forEach(addCoinMarker);
-recalcSyn();
-save.built.forEach(o => addBuiltMarker(o, false));
-reclusterBuilt(); map.once('load', () => { reclusterBuilt(); drawRoads(); });
 
 // ---- ワープゲート: 行ったことのある場所(霧が晴れた場所)に置くと、冒険モードでいつでもそこへ飛べる ----
 const GATE_COST = 30, MAX_GATES = 12;
@@ -1771,6 +1506,7 @@ const visited = p => explored.has(cellOf(p));
 const gateHtml = g => `<div class="gate"><svg viewBox="0 0 64 64" width="58" height="58"><defs><radialGradient id="gg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="#9be7ff"/><stop offset="1" stop-color="#6a4bd8"/></radialGradient></defs><ellipse cx="32" cy="50" rx="24" ry="8" fill="#000" opacity=".25"/><path d="M12 52V26a20 20 0 0 1 40 0v26" fill="none" stroke="#8a7a66" stroke-width="7" stroke-linecap="round"/><path d="M12 52V26a20 20 0 0 1 40 0v26" fill="none" stroke="#c9b99f" stroke-width="3" stroke-linecap="round"/><ellipse class="gv" cx="32" cy="38" rx="14" ry="19" fill="url(#gg)"/><path class="gs" d="M32 22c8 0 12 8 6 13s-12 2-10 9" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".85"/></svg><i class="gn">${esc(g.name)}</i></div>`;
 function addGateMarker(g) { gateMarkers.set(g.id, addPin(g, '', gateHtml(g), () => openGate(g))); }
 save.gates.forEach(addGateMarker);
+cityInit();
 function nearName(p) {
   let best = null, bd = 200;
   for (const q of pois.values()) { const d = dist(p, q); if (d < bd && save.found[q.id]) { bd = d; best = q; } }
@@ -1779,7 +1515,7 @@ function nearName(p) {
 function startPlacingGate() {
   if (save.gates.length >= MAX_GATES) return toast(`ゲートは${MAX_GATES}個までです`);
   if (save.gold < GATE_COST) return toast(`コインが足りません (${GATE_COST}🪙)`);
-  placing = null; placingGate = true; $('adv').hidden = true; $('build').hidden = true;
+  placingGate = true; $('adv').hidden = true;
   $('place-text').textContent = `🌀 ワープゲート(${GATE_COST}🪙)を置く場所をタップ — 行ったことのある場所(霧が晴れた所)だけ置けます`;
   $('placebar').hidden = false; $('place-here').hidden = !me;
 }
@@ -1800,7 +1536,7 @@ function warpTo(gt) {
   toast(`🌀 ワープ！ ${gt.name}`); persist();
 }
 function openGate(gt) {
-  if (placing || placingGate) return;
+  if (placingGate) return;
   $('obj-title').innerHTML = `<span class="ic">🌀</span>${esc(gt.name)}`;
   $('obj-sub').innerHTML = `<div>行ったことのある場所へ、一瞬で飛べるゲート。冒険モードでは、どこからでも使えます。</div><div>設置: ${gt.d}</div>`;
   $('obj-del').hidden = false;
