@@ -924,7 +924,8 @@ function describeText(text) {
       const keys = o => Object.keys(o).slice(0, 12).map(k => `${k}:${typ(o[k])}`).join(', ');
       if (Array.isArray(j)) { L.push('配列の長さ: ' + j.length); if (j[0] && typeof j[0] === 'object') { L.push('要素[0]のキー: ' + keys(j[0])); for (const k of Object.keys(j[0]).slice(0, 8)) { const v = j[0][k]; const s = Array.isArray(v) ? v[0] : v; if (s && typeof s === 'object') L.push(`  ${k} の中: ${keys(s)}`); } } else L.push('要素[0]: ' + mask(JSON.stringify(j[0]))); }
       else { L.push('キー: ' + keys(j)); for (const k of Object.keys(j).slice(0, 6)) { const v = j[k], s = Array.isArray(v) ? v[0] : v; if (s && typeof s === 'object') L.push(`  ${k} の中: ${keys(s)}`); } }
-    } else L.push('形式: ' + (t[0] === '<' ? 'XML' : 'テキスト'));
+    } else if (t[0] === '<') { const c = n => (t.match(new RegExp('<' + n + '[\\s>/]', 'gi')) || []).length; L.push(`形式: XML / trkpt:${c('trkpt')} rtept:${c('rtept')} wpt:${c('wpt')} Trackpoint:${c('Trackpoint')} coordinates:${c('coordinates')} time:${c('time')}`); }
+    else L.push('形式: テキスト(' + t.split(/\r?\n/).length + '行)');
   } catch (e) { L.push('JSONとして読めません'); }
   L.push('冒頭: ' + mask(t.slice(0, 200)));
   return L.join('\n');
@@ -948,7 +949,29 @@ async function zipEntryText(buf, f) {
   if (typeof DecompressionStream === 'undefined') throw new Error('このブラウザはZIPの展開に未対応です。ZIPを解凍して、中のJSONを選んでください');
   return await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
 }
+// 最後の手段: 書式が崩れていても、タグの属性(lat=\"..\" lon=\"..\")や、数字の組(35.68,139.76)を直接探す
+function looseText(t) {
+  const pts = [], inR = (a, b) => Math.abs(a) <= 90 && Math.abs(b) <= 180;
+  const re1 = /<[^>]*?\blat\s*=\s*["']?\s*(-?\d+(?:\.\d+)?)\s*["']?[^>]*?\blo?n[g]?\s*=\s*["']?\s*(-?\d+(?:\.\d+)?)/gi, re2 = /<[^>]*?\blo?n[g]?\s*=\s*["']?\s*(-?\d+(?:\.\d+)?)\s*["']?[^>]*?\blat\s*=\s*["']?\s*(-?\d+(?:\.\d+)?)/gi;
+  const timeAfter = i => { const m = /<time>\s*([^<\s]+)\s*<\/time>/i.exec(t.slice(i, i + 400)); return m ? Date.parse(m[1]) : null; };
+  let m;
+  while ((m = re1.exec(t))) if (inR(+m[1], +m[2])) pts.push({ lat: +m[1], lng: +m[2], t: timeAfter(m.index + m[0].length) });
+  if (!pts.length) while ((m = re2.exec(t))) if (inR(+m[2], +m[1])) pts.push({ lat: +m[2], lng: +m[1], t: timeAfter(m.index + m[0].length) });
+  if (!pts.length) {
+    const re3 = /(-?\d{1,3}\.\d{3,})\s*[,;\t ]\s*(-?\d{1,3}\.\d{3,})/g;
+    while ((m = re3.exec(t))) { let a = +m[1], b = +m[2]; if (Math.abs(a) > 90) [a, b] = [b, a]; if (inR(a, b)) pts.push({ lat: a, lng: b, t: null }); }
+  }
+  return pts.length ? [pts.map(p => ({ ...p, t: p.t != null && !isNaN(p.t) ? p.t : null }))] : [];
+}
 function parseTracks(text) {
+  let tr = [], err = null;
+  try { tr = parseTracksCore(text); } catch (e) { err = e; }
+  if (tr.length) return tr;
+  const lo = looseText(text.trim()); if (lo.length) return lo;
+  if (err) throw err;
+  return [];
+}
+function parseTracksCore(text) {
   const t = text.trim(), out = [];
   const pt = (lat, lng, tm) => (lat != null && lng != null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) ? { lat, lng, t: tm && !isNaN(tm) ? tm : null } : null;
   if (t[0] === '<') {
@@ -1037,7 +1060,7 @@ async function overpassPost(q) {
 const fpSet = new Set(save.importFp);          // 取り込み済みの道すじ(1本ずつ。期間を変えて入れ直しても二重に数えない)
 const hashStr = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i); return (h >>> 0).toString(36); };
 const trackFp = tr => { const a = tr[0], b = tr[tr.length - 1]; return hashStr(`${tr.length}|${a.t || ''}|${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.t || ''}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}`); };
-async function importFile(file) {
+async function importFileInner(file) {
   const log = msg => { $('imp-status').textContent = msg; };
   if (file.size > 200e6) return log(`⚠️ ${file.name}: ファイルが大きすぎます(200MB超)。期間を絞って書き出し直してください`);
   $('imp-diag').hidden = true;
@@ -1061,9 +1084,10 @@ async function importFile(file) {
   } catch (e) { return log(`⚠️ ${file.name}: ${e.message || '読み取れませんでした'}`); }
   if (!tracks.length && diagText) { $('imp-diag').value = diagText; $('imp-diag').hidden = false; }
   if (!tracks.length && firstErr) return log(`⚠️ ${file.name}: ${firstErr.message || '読み取れませんでした'}`);
-  const days = +$('imp-range').value;                                   // 期間の指定(0=全期間)
+  const days = +$('imp-range').value, totalBefore = tracks.length;      // 期間の指定(0=全期間)
   if (days) { const cut = Date.now() - days * 864e5; tracks = tracks.map(tr => tr.filter(p => !p.t || p.t >= cut)).filter(tr => tr.length); }
-  if (!tracks.length) return log(`⚠️ ${file.name}: 道すじが見つかりませんでした(期間の指定が合っているか確認してください)`);
+  if (!tracks.length && totalBefore) { $('imp-range').value = '0'; return log(`ℹ️ ${file.name}: ${totalBefore}本の道すじが見つかりましたが、指定した期間(直近${days}日)の記録がありませんでした。期間を「すべて」に切り替えたので、もう一度ファイルを選んでください`); }
+  if (!tracks.length) return log(`⚠️ ${file.name}: 道すじ(座標)が見つかりませんでした。下の診断を、そのままコピーして教えてください`);
   const fresh = tracks.filter(tr => !fpSet.has(trackFp(tr)));
   if (!fresh.length) return log(`ℹ️ ${file.name} は取り込み済みです`);
   const r = buildSamples(fresh);
@@ -1113,6 +1137,11 @@ async function importFile(file) {
   const summary = `${(r.total / 1000).toFixed(1)}km ・ 霧 +${((explored.size - cellsBefore) * CELL * CELL / 1e6).toFixed(3)}km² ・ 名所 +${poiNew} ・ 新しい県 ${gain.pref} / 市区町村 ${gain.city} ・ 👣 +${Math.round(r.total * AP_PER_M)}`;
   save.imports.unshift({ name: file.name, date: todayStr(), summary }); save.imports.length = Math.min(save.imports.length, 8); persist();
   log('✅ 取り込み完了: ' + summary); celebrate('📥', `取り込み完了！ ${(r.total / 1000).toFixed(1)}km`); renderAdvPanel();
+}
+const importFileRaw = importFileInner;
+async function importFile(file) {
+  try { await importFileRaw(file); }
+  catch (e) { $('imp-status').textContent = `⚠️ ${file.name}: 想定外のエラー(${e && e.message || e})。下の診断を、そのままコピーして教えてください`; $('imp-diag').value = `エラー: ${e && e.stack || e}`; $('imp-diag').hidden = false; }
 }
 function renderAdvPanel() {
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
@@ -1164,7 +1193,17 @@ setTimeout(importShared, 2500);
 $('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
 $('adv-toggle').onclick = () => { setMode(mode === 'adventure' ? 'real' : 'adventure'); $('adv').hidden = true; };
-$('imp-file').onchange = async e => { const files = [...e.target.files]; e.target.value = ''; for (const f of files) await importFile(f); };
+$('imp-file').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  if (!files.length) return;
+  $('imp-status').textContent = '選んだファイル: ' + files.map(f => `${f.name} (${f.size >= 1e6 ? (f.size / 1e6).toFixed(1) + 'MB' : Math.max(1, Math.round(f.size / 1024)) + 'KB'})`).join(', ');
+  await sleep(50);
+  for (const f of files) await importFile(f);
+};
+$('imp-paste-go').onclick = async () => {        // ファイルが選べないときの逃げ道: 中身を貼り付けて取り込む
+  const tx = $('imp-paste').value.trim(); if (!tx) return $('imp-status').textContent = '⚠️ 貼り付ける欄が空です';
+  await importFile(new File([tx], '貼り付け.txt')); $('imp-paste').value = '';
+};
 
 // ---- 操作 ----
 map.on('dragstart', () => { follow = false; });

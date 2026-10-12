@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
 <div id="map"></div>
@@ -68,10 +68,14 @@
     <h3>📥 GPSログの取り込み</h3>
     <p class="note">GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴(JSON・Takeout の ZIP)に対応。形式が分からないJSONでも、座標らしい値を探して読み取ります。歩いた道の霧が晴れ、通った県・市区町村、道すじ沿いの名所も記録され、距離が👣になります。速度の制限はなく、電車や車の移動も、記録のとおりに反映されます。</p>
     <p class="note">💡 ホーム画面に「インストール」しておくと、GPSLoggerなどのアプリで、GPXを「共有」→「Sanpo Quest」を選ぶだけで取り込めます。</p>
-    <label class="rangesel">取り込む期間 <select id="imp-range"><option value="0">すべて</option><option value="365">直近1年</option><option value="90">直近3か月</option><option value="30" selected>直近1か月</option><option value="7">直近1週間</option></select></label>
-    <label class="filebtn">ファイルを選ぶ<input id="imp-file" type="file" multiple accept=".gpx,.tcx,.kml,.json,.geojson,.csv,.zip,application/json,application/zip,text/xml,text/csv"></label>
+    <label class="rangesel">取り込む期間 <select id="imp-range"><option value="0" selected>すべて</option><option value="365">直近1年</option><option value="90">直近3か月</option><option value="30">直近1か月</option><option value="7">直近1週間</option></select></label>
+    <label class="filebtn">ファイルを選ぶ(どの種類でも選べます)<input id="imp-file" type="file" multiple></label>
     <div id="imp-status"></div>
     <textarea id="imp-diag" rows="7" readonly hidden></textarea>
+    <details class="paste"><summary>ファイルが選べないとき: 中身を貼り付けて取り込む</summary>
+      <textarea id="imp-paste" rows="4" placeholder="GPX・JSON・CSVの中身をここに貼り付け"></textarea>
+      <button id="imp-paste-go" class="sub2">貼り付けた内容を取り込む</button>
+    </details>
     <ul id="imp-hist"></ul>
     <button id="adv-export" class="sub2">このアプリの足あとをGPXで書き出す</button>
     <button id="adv-close" class="sub2">閉じる</button>
@@ -87,8 +91,8 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=19"></script>
-<script src="jpmap.js?v=19"></script>
-<script src="game.js?v=19"></script>
+<script src="art.js?v=20"></script>
+<script src="jpmap.js?v=20"></script>
+<script src="game.js?v=20"></script>
 </body>
 </html>
