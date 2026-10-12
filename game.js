@@ -7,7 +7,7 @@ const POI_RADIUS = 700;       // 名所を探す範囲(m)
 const MIN_STEP = 3;           // これ未満の移動は無視(m)
 const MAX_SPEED = 12;         // m/s これ超は車・GPS飛びとして歩行距離に加算しない
 const TRAIL_MAX = 8000;
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://lz4.overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 const START = { lat: 35.681236, lng: 139.767125 };   // GPSが無いときの開始地点(東京駅)
 const CAM = { zoom: 16.6, pitch: 58 };
 const RAD = Math.PI / 180, R_EARTH = 6378137;
@@ -341,42 +341,88 @@ const FLAVOR = {
 };
 const flavor = p => { const l = FLAVOR[p.k] || ['不思議な気配がする。']; let h = 0; for (const ch of p.id) h += ch.charCodeAt(0); return l[h % l.length]; };
 const pois = new Map();          // id -> {id,e,k,name,lat,lng,marker}
-let poiCenter = null, poiFetching = false, poiFailedAt = 0;
+let poiCenter = null, poiFetching = false, poiRetryAt = 0, poiFailCount = 0, poiLoadedAt = 0, poiMsg = null;
 const poiHtml = (p, found) => found
   ? `<div class="obj found" style="--c:${ART.poiColor(p.k)}"><span class="sp">${ART.poi(p.k, 66)}</span><div class="base"></div><span class="nm">${esc(p.name)}</span></div>`
   : `<div class="obj unk"><span class="sp">${ART.unknown(54)}</span><div class="base"></div></div>`;
-async function fetchPois(center) {
-  poiFetching = true;
-  const a = `(around:${POI_RADIUS},${center.lat.toFixed(5)},${center.lng.toFixed(5)})`;
-  const q = `[out:json][timeout:20];(nwr${a}["name"]["historic"];nwr${a}["name"]["amenity"~"place_of_worship|public_bath|cafe|library"];` +
-    `nwr${a}["name"]["leisure"~"park|garden|nature_reserve"];nwr${a}["name"]["tourism"~"viewpoint|attraction|artwork|museum|gallery"];` +
-    `nwr${a}["name"]["railway"="station"];);out center 120;`;
-  for (const url of OVERPASS) {
-    try {
-      const res = await fetch(url + '?data=' + encodeURIComponent(q));
-      if (!res.ok) continue;
-      const data = await res.json();
-      for (const el of data.elements) {
-        const id = el.type + el.id, t = el.tags || {}, c = classify(t);
-        const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon;
-        if (!c || lat == null || pois.has(id)) continue;
-        const p = { id, e: c.e, k: c.k, name: t['name:ja'] || t.name, lat, lng };
-        p.marker = addPin(p, '', poiHtml(p, !!save.found[id]), () => {
-          if (!me) return;
-          if (save.found[id]) toast(`${p.e} ${p.name}\n${flavor(p)}`);
-          else toast(`❓ まだ見ぬ名所…あと ${Math.round(dist(p, me))}m`);
-        });
-        pois.set(id, p);
-      }
-      poiCenter = center; poiFetching = false; updateHint(); return;
-    } catch (e) { /* 次のサーバーへ */ }
+// Overpass(OpenStreetMapの無料サーバー)への問い合わせ: 時間切れつき。返事が遅いときは、少しずつ遅らせて別のサーバーにも同時に聞き、先に返った答えを使う
+function overpassRace(q, timeout = 12000, hedge = [0, 2500, 5000, 8000]) {
+  return new Promise((resolve, reject) => {
+    const ctrls = [], timers = []; let pending = 0, nextIdx = 0, done = false;
+    const finish = (fn, v) => { if (done) return; done = true; timers.forEach(clearTimeout); ctrls.forEach(a => a.abort()); fn(v); };
+    const launchNext = () => {
+      if (done || nextIdx >= hedge.length) return false;
+      const url = OVERPASS[nextIdx++ % OVERPASS.length], ac = new AbortController(); ctrls.push(ac); pending++;
+      timers.push(setTimeout(() => ac.abort(), timeout));
+      fetch(url + '?data=' + encodeURIComponent(q), { signal: ac.signal })
+        .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+        .then(d => finish(resolve, d))
+        .catch(() => { pending--; if (done) return; if (!launchNext() && pending === 0) finish(reject, new Error('overpass')); });
+      return true;
+    };
+    hedge.forEach((ms, i) => timers.push(setTimeout(launchNext, ms)));
+    if (!hedge.length) reject(new Error('overpass'));
+  });
+}
+// 取得した名所は端末に保存して、次の起動からは通信を待たずに表示する
+const POI_CACHE_KEY = 'sanpo-poi';
+let poiCache = { items: {}, at: {} };
+try { const j = JSON.parse(localStorage.getItem(POI_CACHE_KEY) || '{}'); poiCache = { items: j.items || {}, at: j.at || {} }; } catch (e) { /* 空から始める */ }
+const poiTile = p => Math.round(p.lat / 0.006) + ',' + Math.round(p.lng / 0.006);
+function savePoiCache() {
+  const ids = Object.keys(poiCache.items); if (ids.length > 4000) ids.slice(0, ids.length - 4000).forEach(k => delete poiCache.items[k]);
+  try { localStorage.setItem(POI_CACHE_KEY, JSON.stringify(poiCache)); } catch (e) { /* 保存できなくても動く */ }
+}
+function addPoi(p) {
+  if (pois.has(p.id)) return;
+  p.marker = addPin(p, '', poiHtml(p, !!save.found[p.id]), () => {
+    if (!me) return;
+    if (save.found[p.id]) toast(`${p.e} ${p.name}\n${flavor(p)}`);
+    else toast(`❓ まだ見ぬ名所…あと ${Math.round(dist(p, me))}m`);
+  });
+  pois.set(p.id, p);
+}
+function showCachedPois(c) {
+  const dl = POI_RADIUS * 1.5 / 111320, dn = dl / Math.cos(c.lat * RAD);
+  for (const [id, v] of Object.entries(poiCache.items)) {
+    if (pois.has(id) || Math.abs(v.la - c.lat) > dl || Math.abs(v.ln - c.lng) > dn) continue;
+    addPoi({ id, e: v.e, k: v.k, name: v.n, lat: v.la, lng: v.ln });
   }
-  poiFailedAt = Date.now(); poiFetching = false;
+}
+async function fetchPois(center) {
+  poiFetching = true; if (!pois.size) { poiMsg = '🔎 近くの名所を探しています…'; updateHint(); }
+  const a = `(around:${POI_RADIUS},${center.lat.toFixed(5)},${center.lng.toFixed(5)})`;
+  const q = `[out:json][timeout:12];(nw${a}["name"]["historic"];nw${a}["name"]["amenity"~"place_of_worship|public_bath|cafe|library"];` +
+    `nw${a}["name"]["leisure"~"park|garden|nature_reserve"];nw${a}["name"]["tourism"~"viewpoint|attraction|artwork|museum|gallery"];` +
+    `nw${a}["name"]["railway"="station"];);out center 100;`;
+  try {
+    const data = await overpassRace(q);
+    for (const el of data.elements) {
+      const id = el.type + el.id, t = el.tags || {}, c = classify(t);
+      const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon;
+      if (!c || lat == null) continue;
+      const name = t['name:ja'] || t.name;
+      poiCache.items[id] = { n: name, k: c.k, e: c.e, la: +lat.toFixed(6), ln: +lng.toFixed(6) };
+      addPoi({ id, e: c.e, k: c.k, name, lat, lng });
+    }
+    poiCache.at[poiTile(center)] = Date.now(); savePoiCache();
+    poiCenter = center; poiLoadedAt = Date.now(); poiFailCount = 0; poiMsg = null;
+  } catch (e) {
+    poiFailCount++; poiRetryAt = Date.now() + Math.min(60, 6 * 2 ** poiFailCount) * 1000;          // 失敗したら、少しずつ間をあけて自動でやり直す
+    if (!pois.size) poiMsg = '⚠️ 名所を読み込めません(通信が混み合っています)。自動でやり直します…';
+  }
+  poiFetching = false; updateHint();
 }
 function maybeFetchPois() {
-  if (!me || poiFetching || Date.now() - poiFailedAt < 60000) return;
-  if (!poiCenter || dist(poiCenter, me) > POI_RADIUS * 0.45) fetchPois(me);
+  if (!me) return;
+  if (poiCenter && dist(poiCenter, me) <= POI_RADIUS * 0.45) { if (!poiFetching && poiMsg && Date.now() >= poiRetryAt) { poiCenter = null; } else return; }
+  showCachedPois(me);                                                                                         // 保存ずみの名所を、すぐ表示
+  const fresh = poiCache.at[poiTile(me)] && Date.now() - poiCache.at[poiTile(me)] < 3 * 864e5;
+  if (fresh) { poiCenter = me; poiLoadedAt = poiLoadedAt || Date.now(); poiMsg = null; updateHint(); return; }    // 最近取得ずみの場所は、通信しない
+  if (poiFetching || Date.now() < poiRetryAt) return;
+  fetchPois(me);
 }
+setInterval(maybeFetchPois, 5000);
 function checkFound() {
   for (const p of pois.values()) {
     if (save.found[p.id] || dist(p, me) > FOUND_RANGE) continue;
@@ -496,10 +542,7 @@ for (const f of Object.values(save.found)) if (f.region) registerRegion(f.region
 setTimeout(processRegions, 4000);
 
 // ---- 市区町村の達成度: その町にある名所の数を調べ、発見した割合に応じて報酬 ----
-async function overpassJson(q) {
-  for (const url of OVERPASS) { try { const r = await fetch(url + '?data=' + encodeURIComponent(q)); if (r.ok) return await r.json(); } catch (e) { /* 次のサーバーへ */ } }
-  throw new Error('overpass');
-}
+const overpassJson = q => overpassRace(q, 45000, [0, 8000, 16000]);
 async function fetchCityTotal(at) {
   const a = await overpassJson(`[out:json][timeout:25];is_in(${at.lat.toFixed(5)},${at.lng.toFixed(5)});area._["boundary"="administrative"]["admin_level"~"^[78]$"];out tags;`);
   const areas = a.elements.filter(e => e.type === 'area'); if (!areas.length) throw new Error('no area');
@@ -511,6 +554,7 @@ async function fetchCityTotal(at) {
 let totalsPromise = null, totalFailAt = 0;
 function processTotals() {
   if (totalsPromise) return totalsPromise;
+  if (!poiLoadedAt || poiFetching || Date.now() - poiLoadedAt < 15000) { setTimeout(processTotals, 10000); return Promise.resolve(); }      // 名所の取得を優先する(町の総数は、そのあと)
   totalsPromise = (async () => {
     try {
       while (true) {
@@ -650,6 +694,7 @@ function updateHint() {
   let best = null, bd = Infinity;
   for (const p of pois.values()) { if (save.found[p.id]) continue; const d = dist(p, me); if (d < bd) { bd = d; best = p; } }
   const h = $('hint');
+  if (!pois.size && poiMsg) { h.hidden = false; h.textContent = poiMsg; return; }
   if (!best) { h.hidden = !pois.size; h.textContent = pois.size ? '近くの名所はすべて発見済み！' : ''; return; }
   h.hidden = false;
   h.textContent = `❓ 次の名所まで ${bd >= 1000 ? (bd / 1000).toFixed(1) + 'km' : Math.round(bd) + 'm'} ${DIRS[Math.round(bearing(me, best) / 45) % 8]}の方角`;
