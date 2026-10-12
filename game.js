@@ -346,11 +346,54 @@ function maybeFetchPois() {
 function checkFound() {
   for (const p of pois.values()) {
     if (save.found[p.id] || dist(p, me) > FOUND_RANGE) continue;
-    save.found[p.id] = { name: p.name, e: p.e, k: p.k, date: todayStr() };
+    save.found[p.id] = { name: p.name, e: p.e, k: p.k, date: todayStr(), lat: p.lat, lng: p.lng, region: null };
+    setTimeout(processRegions, 800);
     p.marker.getElement().innerHTML = poiHtml(p, true);
     celebrate(ART.poi(p.k, 104), `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙 +1🔮'); addGold(20); addShard(1);
   }
 }
+// ---- 地域の記録(都道府県 → 市区町村 → 町) ----
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const regionCache = new Map();
+let regionFailAt = 0;
+async function lookupRegion(lat, lng) {
+  const key = Math.round(lat / 0.004) + ',' + Math.round(lng / 0.004);     // 約400m四方は同じ地域として使い回す
+  if (regionCache.has(key)) return regionCache.get(key);
+  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&addressdetails=1&accept-language=ja&lat=${lat}&lon=${lng}`);
+  if (!res.ok) throw new Error('region ' + res.status);
+  const a = (await res.json()).address || {};
+  const reg = { pref: a.state || a.province || a.region || '', city: a.city || a.town || a.village || a.municipality || a.county || '',
+    ward: a.city_district || '', town: a.suburb || a.quarter || a.neighbourhood || a.hamlet || '' };
+  if (!reg.city && reg.ward) { reg.city = reg.ward; reg.ward = ''; }
+  if (reg.ward === reg.city) reg.ward = '';
+  if (!reg.pref && !reg.city) throw new Error('no region');
+  regionCache.set(key, reg); return reg;
+}
+let regionPromise = null;
+function processRegions() {                  // 地域が未取得の名所を、1件ずつ(間隔をあけて)調べる
+  if (regionPromise) return regionPromise;
+  regionPromise = (async () => {
+    try {
+      while (true) {
+        const next = Object.entries(save.found).find(([, f]) => !f.region && f.lat != null);
+        if (!next || Date.now() - regionFailAt < 60000) break;
+        const [id, f] = next;
+        try { f.region = await lookupRegion(f.lat, f.lng); onNewRegion(id, f); persist(); }
+        catch (e) { regionFailAt = Date.now(); break; }
+        await sleep(1200);
+      }
+    } finally { regionPromise = null; }
+  })();
+  return regionPromise;
+}
+function onNewRegion(id, f) {                // 初めての都道府県・市区町村ならボーナス
+  const r = f.region, others = Object.entries(save.found).filter(([k, o]) => k !== id && o.region);
+  const prefSeen = !r.pref || others.some(([, o]) => o.region.pref === r.pref);
+  const citySeen = !r.city || others.some(([, o]) => o.region.pref === r.pref && o.region.city === r.city);
+  if (!prefSeen) { celebrate('🗾', `はじめての地方！ ${r.pref}`); addGold(100); addShard(3); toast(`${r.pref} に初上陸！\nボーナス +100🪙 +3🔮`); }
+  else if (!citySeen) { celebrate('🏙️', `はじめての町！ ${r.city}`); addGold(30); addShard(1); toast(`${r.city} に初上陸！\nボーナス +30🪙 +1🔮`); }
+}
+setTimeout(processRegions, 4000);
 const DIRS = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
 function bearing(a, b) {
   const y = Math.sin((b.lng - a.lng) * RAD) * Math.cos(b.lat * RAD);
@@ -651,14 +694,43 @@ $('build-close').onclick = () => { $('build').hidden = true; };
 $('obj-close').onclick = () => { $('obj').hidden = true; };
 $('place-cancel').onclick = stopPlacing;
 $('place-here').onclick = () => placeAt(me);
-$('btn-book').onclick = () => {
-  const items = Object.values(save.found).sort((a, b) => b.date.localeCompare(a.date));
-  $('book-list').innerHTML = items.length
-    ? items.map(f => `<li>${f.e} <b>${esc(f.name)}</b><small>${f.k} ・ ${f.date}</small></li>`).join('')
-    : '<li>まだ何も発見していません。❓を目指して歩こう！</li>';
-  $('book-list').insertAdjacentHTML('afterbegin', `<li>🏗️ つくったもの ${save.built.length}個 ／ 🪙 ${save.gold} ／ 🔮 ${save.shards}</li>`);
-  $('book').hidden = false;
-};
+let bookTab = 'region', bookFresh = true;
+const bookItem = f => `<li data-lat="${f.lat ?? ''}" data-lng="${f.lng ?? ''}"><span class="ic">${ART.poi(f.k, 30)}</span><div><b>${esc(f.name)}</b><small>${esc(f.k)} ・ ${f.date}</small></div></li>`;
+function renderBook() {
+  const openKeys = new Set([...$('book-body').querySelectorAll('details[open]')].map(d => d.dataset.k)), fresh = bookFresh; bookFresh = false;   // 作り直しても開いている項目を保つ
+  const items = Object.entries(save.found).map(([id, f]) => ({ id, ...f })).sort((x, y) => y.date.localeCompare(x.date));
+  const prefs = new Set(), cities = new Set();
+  for (const f of items) if (f.region) { if (f.region.pref) prefs.add(f.region.pref); if (f.region.city) cities.add(f.region.pref + '/' + f.region.city); }
+  $('book-sum').innerHTML = `🗾 ${prefs.size}都道府県 ・ 🏙️ ${cities.size}市区町村 ・ ⛩️ ${items.length}名所<br>🏗️ つくったもの ${save.built.length}個 ／ 🪙 ${save.gold} ／ 🔮 ${save.shards}`;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === bookTab));
+  let html = '';
+  if (!items.length) html = '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
+  else if (bookTab === 'recent') html = '<ul>' + items.map(bookItem).join('') + '</ul>';
+  else {
+    const tree = new Map();       // 都道府県 -> 市区町村 -> 町 -> [名所]
+    for (const f of items) {
+      const r = f.region, p = r?.pref || (f.lat != null ? '（地域を取得中…）' : '（地域の記録なし）');
+      const c = r?.city ? r.city + (r.ward ? ' ' + r.ward : '') : '—', t = r?.town || '—';
+      if (!tree.has(p)) tree.set(p, new Map()); const cm = tree.get(p);
+      if (!cm.has(c)) cm.set(c, new Map()); const tm = cm.get(c);
+      if (!tm.has(t)) tm.set(t, []); tm.get(t).push(f);
+    }
+    const cnt = m => [...m.values()].reduce((s, v) => s + (Array.isArray(v) ? v.length : cnt(v)), 0);
+    html = [...tree.entries()].sort((x, y) => cnt(y[1]) - cnt(x[1])).map(([p, cm], pi) =>
+      `<details data-k="${esc(p)}" ${(fresh ? pi === 0 : openKeys.has(p)) ? 'open' : ''}><summary>${esc(p)}<b>${cnt(cm)}</b></summary>` +
+      [...cm.entries()].sort((x, y) => cnt(y[1]) - cnt(x[1])).map(([c, tm]) =>
+        `<details data-k="${esc(p + '|' + c)}" ${(fresh ? pi === 0 : openKeys.has(p + '|' + c)) ? 'open' : ''}><summary>${esc(c)}<b>${cnt(tm)}</b></summary>` +
+        [...tm.entries()].map(([t, fs]) => t === '—' ? `<ul>${fs.map(bookItem).join('')}</ul>`
+          : `<details data-k="${esc(p + '|' + c + '|' + t)}" ${openKeys.has(p + '|' + c + '|' + t) ? 'open' : ''}><summary>${esc(t)}<b>${fs.length}</b></summary><ul>${fs.map(bookItem).join('')}</ul></details>`).join('') + '</details>').join('') + '</details>').join('');
+  }
+  $('book-body').innerHTML = html;
+  $('book-body').querySelectorAll('li[data-lat]').forEach(li => li.onclick = () => {      // タップでその場所へ
+    const lat = parseFloat(li.dataset.lat), lng = parseFloat(li.dataset.lng); if (isNaN(lat)) return;
+    $('book').hidden = true; follow = false; map.flyTo({ center: [lng, lat], zoom: 17, pitch: CAM.pitch, duration: 1600 });
+  });
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { bookTab = b.dataset.tab; renderBook(); });
+$('btn-book').onclick = () => { bookFresh = true; renderBook(); $('book').hidden = false; processRegions().then(() => { if (!$('book').hidden) renderBook(); }); };
 $('book-close').onclick = () => { $('book').hidden = true; };
 
 // ---- 位置更新 ----

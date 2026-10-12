@@ -103,3 +103,23 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 #build-list button b{display:block;line-height:0;margin-bottom:2px}
 #build-list button .mini{display:flex;gap:2px;justify-content:center;line-height:0;opacity:.85}
 #obj-title .ic{margin-right:6px}
+
+#book-sum{font-size:13px;line-height:1.7;margin-bottom:10px;padding:8px 10px;background:#fff8e1;border-radius:10px;border:1px solid #e3d5ac}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{flex:1;padding:7px;background:#e8dcb8;color:#5b4326;font-weight:700}
+.tabs button.on{background:#5b4326;color:#fff}
+#book-body{margin-bottom:12px;max-height:46vh;overflow:auto}
+#book-body details{margin:0 0 4px;border-radius:8px}
+#book-body summary{cursor:pointer;padding:6px 8px;border-radius:8px;font-weight:700;background:#efe3c1;list-style:none}
+#book-body summary::-webkit-details-marker{display:none}
+#book-body summary::before{content:"▸ "}
+#book-body details[open]>summary::before{content:"▾ "}
+#book-body summary b{float:right;font-size:12px;color:#8a5a00}
+#book-body details details{margin-left:10px}
+#book-body details details summary{background:#f6ecd0;font-weight:500}
+#book-body details details details summary{background:transparent;font-size:13px;padding:4px 8px}
+#book-body ul{list-style:none;padding:0;margin:2px 0 4px 8px}
+#book-body li{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #ecdfb8;font-size:14px;cursor:pointer}
+#book-body li div{flex:1;min-width:0}
+#book-body li small{display:block;opacity:.65;font-size:11px}
+#book-body .empty{padding:10px;opacity:.7;font-size:13px}
