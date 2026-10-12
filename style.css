@@ -208,3 +208,5 @@ svg.jp text{font-size:8px}
 .lk{display:inline-block;line-height:0;opacity:.35;margin-right:2px;vertical-align:middle}.lk.on{opacity:1;filter:drop-shadow(0 0 3px #ffd873)}
 #build-list button .likes{display:flex;gap:2px;justify-content:center;align-items:center;line-height:0;opacity:.9}
 .lite .clu::before{box-shadow:none}
+.tbtn{display:flex;gap:6px;margin-top:4px}.tbtn button{width:auto!important;padding:4px 10px!important;font-size:12px!important;background:#e6d9b8!important;color:#3a2a10!important;border:0;border-radius:8px}
+.tabs{flex-wrap:wrap}.tabs button{flex:1 0 30%;padding:7px 2px;font-size:13px}

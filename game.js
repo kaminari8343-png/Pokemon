@@ -61,7 +61,7 @@ function buildStyle() {
     light: { anchor: 'map', color: '#fff1d6', intensity: 0.5, position: [1.2, 205, 40] },
     sources: {
       ofm: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      trail: { type: 'geojson', data: EMPTY }, place: { type: 'geojson', data: EMPTY },
+      trail: { type: 'geojson', data: EMPTY }, place: { type: 'geojson', data: EMPTY }, roads: { type: 'geojson', data: EMPTY }, roadsyn: { type: 'geojson', data: EMPTY },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#eadcb6' } },
@@ -109,6 +109,9 @@ function buildStyle() {
         layout: { 'text-field': ['coalesce', ['get', 'name:ja'], ['get', 'name']], 'text-font': ['Noto Sans Regular'],
           'text-size': ['interpolate', ['linear'], ['zoom'], 12, 12, 17, 17], 'text-max-width': 8 },
         paint: { 'text-color': '#5a3e1b', 'text-halo-color': 'rgba(255,244,216,.96)', 'text-halo-width': 1.8 } },
+      { id: 'road-bed', type: 'line', source: 'roads', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#7d5e34', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 3, 19, 15], 'line-opacity': 0.92 } },
+      { id: 'road-line', type: 'line', source: 'roads', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ecd8a8', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1.4, 19, 8.5] } },
+      { id: 'road-syn', type: 'line', source: 'roadsyn', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffc83d', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1.2, 19, 4.5], 'line-dasharray': [1, 1.7], 'line-blur': 0.6 } },
       { id: 'trail-glow', type: 'line', source: 'trail', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#ffd873', 'line-width': 12, 'line-blur': 7, 'line-opacity': 0.7 } },
       { id: 'trail-dots', type: 'line', source: 'trail', layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -683,6 +686,9 @@ const TITLES = [
   { id: 'build10', name: 'つくり手 見習い', desc: '物を10回つくる', ok: () => (save.stats.builds || 0) >= 10, gold: 100, shards: 1 },
   { id: 'build50', name: 'つくり手 達人', desc: '物を50回つくる', ok: () => (save.stats.builds || 0) >= 50, gold: 300, shards: 3 },
   { id: 'build100', name: 'つくり手 伝説', desc: '物を100回つくる', ok: () => (save.stats.builds || 0) >= 100, gold: 800, shards: 8 },
+  { id: 'dist1', name: '最初の地区', desc: '建物を3つ以上つなげて、地区をつくる', ok: () => districts.length >= 1, gold: 100, shards: 1 },
+  { id: 'dist3', name: '街の設計者', desc: '3つの地区をつくる', ok: () => districts.length >= 3, gold: 400, shards: 4 },
+  { id: 'dist16', name: '大都市の市長', desc: '1つの地区を16棟以上にする', ok: () => districts.some(d => d.list.length >= 16), gold: 800, shards: 8 },
   { id: 'town5', name: '街づくり 見習い', desc: '建物を同時に5つ置く', ok: () => save.built.length >= 5, gold: 60, shards: 1 },
   { id: 'town30', name: '街づくり 達人', desc: '建物を同時に30個置く', ok: () => save.built.length >= 30, gold: 300, shards: 3 },
   { id: 'town100', name: '街づくり 伝説', desc: '建物を同時に100個置く', ok: () => save.built.length >= 100, gold: 900, shards: 8 },
@@ -942,20 +948,56 @@ const LIKES = { flower: ['tree', 'fountain', 'house'], tree: ['flower', 'rest', 
   monument: ['shrine', 'tower', 'library', 'rainbow'], rainbow: ['fountain', 'flower', 'windmill'], farm: ['ranch', 'windmill', 'house', 'market'], ranch: ['farm', 'tree', 'windmill'],
   windmill: ['farm', 'ranch', 'rainbow'], lighthouse: ['harbor', 'tower', 'market'], funfair: ['market', 'tower', 'castle'], castle: ['tower', 'fountain', 'library', 'funfair'],
   market: ['house', 'funfair', 'harbor', 'farm'], onsen: ['shrine', 'tree', 'rest', 'house'], library: ['fountain', 'monument', 'castle', 'observatory'], harbor: ['lighthouse', 'market', 'house'], observatory: ['tower', 'library', 'lantern'] };
-const SYN_RANGE = 70, SYN_STEP = 0.15, SYN_MAX = 4;
-const synCache = new Map();
+const SYN_RANGE = 70, SYN_STEP = 0.15, SYN_MAX = 4, LINK_RANGE = 90;
+const synCache = new Map(), distMulCache = new Map();
+let districts = [], roadsLine = EMPTY, roadsSyn = EMPTY;
+const DIST_TIERS = [[16, 0.25], [10, 0.15], [6, 0.10], [3, 0.05]];          // 地区(つながった建物の集まり)の大きさによるボーナス
+const distTier = n => (DIST_TIERS.find(t => n >= t[0]) || [0, 0])[1];
 function recalcSyn() {
-  synCache.clear();
-  for (const o of save.built) {
-    const likes = LIKES[o.t] || [], got = new Set();
-    for (const q of save.built) if (q !== o && likes.includes(q.t) && dist(o, q) <= SYN_RANGE) got.add(q.t);
+  synCache.clear(); distMulCache.clear();
+  const B = save.built, n = B.length, edges = [], synEdges = [];
+  for (let a = 0; a < n; a++) {
+    const o = B[a], likes = LIKES[o.t] || [], got = new Set();
+    for (let b = 0; b < n; b++) {
+      if (a === b) continue;
+      const q = B[b], d = dist(o, q);
+      if (likes.includes(q.t) && d <= SYN_RANGE) got.add(q.t);
+      if (b > a && d <= LINK_RANGE) edges.push([d, a, b]);
+      if (b > a && d <= SYN_RANGE && (likes.includes(q.t) || (LIKES[q.t] || []).includes(o.t))) synEdges.push([a, b]);
+    }
     synCache.set(o.id, { n: Math.min(SYN_MAX, got.size), types: [...got] });
   }
+  // 道: 近い建物どうしを、いちばん短い道でつなぐ(最小全域木)。つながった集まりが「地区」
+  const par = B.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  const segs = []; edges.sort((x, y) => x[0] - y[0]);
+  for (const [, a, b] of edges) { const ra = find(a), rb = find(b); if (ra !== rb) { par[ra] = rb; segs.push([[B[a].lng, B[a].lat], [B[b].lng, B[b].lat]]); } }
+  const comp = new Map(); B.forEach((o, i) => { const r = find(i); if (!comp.has(r)) comp.set(r, []); comp.get(r).push(o); });
+  districts = [];
+  for (const list of comp.values()) {
+    if (list.length < 3) continue;
+    const types = new Set(list.map(o => o.t)), bonus = distTier(list.length) + 0.02 * Math.min(10, types.size);
+    const c = { lat: list.reduce((s, o) => s + o.lat, 0) / list.length, lng: list.reduce((s, o) => s + o.lng, 0) / list.length };
+    const names = {}; list.forEach(o => { if (o.dn) names[o.dn] = (names[o.dn] || 0) + 1; });
+    const named = Object.entries(names).sort((x, y) => y[1] - x[1])[0];
+    const d = { key: list.map(o => o.id).sort()[0], list, c, types: types.size, bonus, name: named ? named[0] : autoDistrictName(c) };
+    districts.push(d); list.forEach(o => distMulCache.set(o.id, 1 + bonus));
+  }
+  roadsLine = { type: 'FeatureCollection', features: segs.map(s => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: s }, properties: {} })) };
+  roadsSyn = { type: 'FeatureCollection', features: synEdges.map(([a, b]) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[B[a].lng, B[a].lat], [B[b].lng, B[b].lat]] }, properties: {} })) };
+  drawRoads();
 }
+function autoDistrictName(c) {
+  let best = null, bd = 400;
+  for (const f of Object.values(save.found)) { if (f.lat == null) continue; const d = dist(c, f); if (d < bd) { bd = d; best = f; } }
+  if (best) return best.name + '地区';
+  const cr = Object.values(save.regions.city).find(r => r.at && dist(c, r.at) < 3000);
+  return cr ? cr.city + 'の街' : '名もなき街';
+}
+function drawRoads() { const hide = (save.bview || 'auto') === 'hide'; setSrc('roads', hide ? EMPTY : roadsLine); setSrc('roadsyn', hide ? EMPTY : roadsSyn); }
 const synMul = o => 1 + SYN_STEP * ((synCache.get(o.id) || { n: 0 }).n);
 const lvOf = o => o.lv || 1;
 const face = o => ITEM[o.t].chain[lvOf(o) - 1];                 // [絵文字, 名前]
-const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1] * synMul(o);
+const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1] * synMul(o) * (distMulCache.get(o.id) || 1);
 const evoCost = o => ITEM[o.t].cost * (lvOf(o) === 1 ? 2 : 4);
 const accrued = o => Math.min(HARVEST_CAP_H, (Date.now() - o.last) / 3600e3) * rateOf(o);
 const BUILD_RANGE = 40, MAX_BUILT = 300, SHARD_PRICE = 60;
@@ -982,7 +1024,7 @@ const CLUSTER_PX = 58;
 let clusterMarkers = [];
 const worldXY = (o, z) => { const sc = 512 * Math.pow(2, z); return [(o.lng + 180) / 360 * sc, (0.5 - Math.log(Math.tan(Math.PI / 4 + o.lat * RAD / 2)) / (2 * Math.PI)) * sc]; };
 function reclusterBuilt() {
-  clusterMarkers.forEach(m => m.remove()); clusterMarkers = [];
+  clusterMarkers.forEach(m => m.remove()); clusterMarkers = []; drawRoads();
   const mode = save.bview || 'auto', z = map.getZoom(), groups = [];
   for (const o of save.built) {
     const m = builtMarkers.get(o.id); if (!m) continue;
@@ -1083,6 +1125,8 @@ function openObj(o) {
     `<br>つくった日: ${o.d}</div>`;
   const sy = synCache.get(o.id) || { n: 0, types: [] }, likes = LIKES[o.t] || [];
   html += `<div>😊 相性(70m以内): ${sy.n ? `<b>+${Math.round(sy.n * SYN_STEP * 100)}%</b> ` + sy.types.map(t => ITEM[t].chain[0][1]).join('・') : 'なし'}<br><small>好きな相手: ${likes.map(t => `<span class="lk ${sy.types.includes(t) ? 'on' : ''}">${ART.item(t, 1, 20)}</span>`).join('')} 種類ごとに+${Math.round(SYN_STEP * 100)}%(最大+${Math.round(SYN_STEP * SYN_MAX * 100)}%)</small></div>`;
+  const dd = districts.find(d => d.list.includes(o));
+  html += dd ? `<div>🏘️ <b>${esc(dd.name)}</b> (${dd.list.length}棟・${dd.types}種類) 地区ボーナス <b>+${Math.round(dd.bonus * 100)}%</b></div>` : `<div><small>🛤️ 90m以内に建物を3つ以上つなげると「地区」になり、棟数と種類に応じて収穫が増えます</small></div>`;
   if (it.magnet) html += `<div>🧲 近くにコインを呼ぶ力あり</div>`;
   if (it.lucky) html += `<div>🍀 近くのコインが2倍になることがある</div>`;
   if (lv < 3) html += `<div>進化先: ${it.chain[lv][0]} ${it.chain[lv][1]}<br>必要: 🔮×${EVO_SHARDS[lv]} ＋ 🪙${evoCost(o)}</div>`;
@@ -1581,6 +1625,24 @@ function japanMapHtml(items) {
     `<rect x="${M.inset[0]}" y="${M.inset[1]}" width="${M.inset[2]}" height="${M.inset[3]}" rx="6" fill="none" stroke="#8fb5be" stroke-dasharray="4 3"/>${paths}${marks}</svg>` +
     `<div class="jp-note small">県をタップすると詳しく見られます(数字は発見した名所の数)・金色の縁は制覇した地方<br>地図データ: 国土地理院 地球地図日本(2016)</div>`;
 }
+function townHtml() {
+  if (!save.built.length) return '<div class="empty">まだ何もつくっていません。🔨で建物を置こう！</div>';
+  if (!districts.length) return '<div class="empty">🛤️ 90m以内に建物を3つ以上つなげると「地区」になります。<br>道でつながり、収穫ボーナスがつきます。</div>';
+  const list = [...districts].sort((a, b) => b.list.length - a.list.length);
+  return `<div class="jp-note small">地区ボーナス: 3棟+5% / 6棟+10% / 10棟+15% / 16棟+25% ＋ 種類ごとに+2%(最大+20%)</div><ul>` + list.map(d => {
+    const rate = d.list.reduce((s, o) => s + rateOf(o), 0), best = d.list.reduce((a, b) => (lvOf(b) > lvOf(a) ? b : a));
+    return `<li data-town="${d.key}" style="cursor:default"><span class="ic">${ART.item(best.t, lvOf(best), 34)}</span><div><b>${esc(d.name)}</b><small>${d.list.length}棟・${d.types}種類 ・ ボーナス +${Math.round(d.bonus * 100)}% ・ 1時間に ${rate.toFixed(1)}🪙</small>` +
+      `<span class="tbtn"><button data-go="${d.key}">📍 行く</button><button data-rn="${d.key}">✏️ 名前</button></span></div></li>`;
+  }).join('') + '</ul>';
+}
+function wireTown() {
+  const get = k => districts.find(d => d.key === k);
+  $('book-body').querySelectorAll('button[data-go]').forEach(b => b.onclick = () => { const d = get(b.dataset.go); if (!d) return; $('book').hidden = true; follow = false; map.flyTo({ center: [d.c.lng, d.c.lat], zoom: 17.2, pitch: CAM.pitch, duration: 1600 }); });
+  $('book-body').querySelectorAll('button[data-rn]').forEach(b => b.onclick = () => {
+    const d = get(b.dataset.rn); if (!d) return; const nm = prompt('この地区の名前', d.name); if (nm == null) return;
+    const t = nm.trim().slice(0, 14); d.list.forEach(o => { if (t) o.dn = t; else delete o.dn; }); recalcSyn(); persist(); renderBook();
+  });
+}
 function titlesHtml() {
   return '<ul>' + TITLES.map(t => {
     const got = save.titles[t.id], prog = t.area ? ` (${t.area[2].filter(p => save.regions.pref[p]).length}/${t.area[2].length})` : '';
@@ -1597,6 +1659,7 @@ function renderBook() {
   if (bookTab === 'daily') html = dailyHtml();
   else if (bookTab === 'map') html = japanMapHtml(items);
   else if (bookTab === 'titles') html = titlesHtml();
+  else if (bookTab === 'town') html = townHtml();
   else if (bookTab === 'recent') html = items.length ? '<ul>' + items.map(bookItem).join('') + '</ul>' : '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
   else {
     const un = unsorted();
@@ -1623,7 +1686,7 @@ function renderBook() {
         [...tm.entries()].map(([t, fs]) => t === '—' ? (fs.length ? `<ul>${fs.map(bookItem).join('')}</ul>` : '')
           : `<details data-k="${esc(p + '|' + c + '|' + t)}" ${openKeys.has(p + '|' + c + '|' + t) ? 'open' : ''}><summary>${esc(t)}<b>${fs.length}</b></summary><ul>${fs.map(bookItem).join('')}</ul></details>`).join('') + '</details>').join('') + '</details>').join('');
   }
-  $('book-body').innerHTML = html;
+  $('book-body').innerHTML = html; if (bookTab === 'town') wireTown();
   const sn = $('sort-now'); if (sn) sn.onclick = () => { regionFailAt = 0; sn.textContent = '実行中…'; processRegions().then(() => { if (!$('book').hidden) renderBook(); }); };
   $('book-body').querySelectorAll('li[data-lat]').forEach(li => li.onclick = () => {      // タップでその場所へ
     const lat = parseFloat(li.dataset.lat), lng = parseFloat(li.dataset.lng); if (isNaN(lat)) return;
@@ -1696,7 +1759,7 @@ else {
 save.coins.forEach(addCoinMarker);
 recalcSyn();
 save.built.forEach(o => addBuiltMarker(o, false));
-reclusterBuilt(); map.once('load', reclusterBuilt);
+reclusterBuilt(); map.once('load', () => { reclusterBuilt(); drawRoads(); });
 
 // ---- ワープゲート: 行ったことのある場所(霧が晴れた場所)に置くと、冒険モードでいつでもそこへ飛べる ----
 const GATE_COST = 30, MAX_GATES = 12;
