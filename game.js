@@ -11,6 +11,8 @@ const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.k
 const START = { lat: 35.681236, lng: 139.767125 };   // GPSが無いときの開始地点(東京駅)
 const CAM = { zoom: 16.6, pitch: 58 };
 const RAD = Math.PI / 180, R_EARTH = 6378137;
+let gameReady = false;                       // 起動の準備が終わるまで、レベルの再計算はしない
+function bumpXp(n) { save.xp = (save.xp || 0) + n; if (gameReady) updateLevel(); }
 
 // ---- 共通 ----
 const $ = id => document.getElementById(id);
@@ -28,7 +30,7 @@ const isNight = () => { const h = hourNow(); return h < 5 || h >= 19; };
 
 // ---- 保存データ ----
 const KEY = 'sanpo-quest';
-const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], regions: { pref: {}, city: {} }, titles: {}, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [],
+const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], regions: { pref: {}, city: {} }, titles: {}, xp: 0, lvDone: null, daily: null, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [],
   stats: { morning: 0, night: 0, rain: 0, snow: 0, hot: 0, cold: 0, dayMax: 0, streak: 0, streakDay: '' } },
   JSON.parse(localStorage.getItem(KEY) || '{}'));
 save.coins = save.coins.filter(c => c.exp > Date.now());
@@ -459,6 +461,7 @@ function registerRegion(reg, bonus, at) {
   if (bonus === 'quiet') { if (newPref) { save.gold += 100; save.shards += 3; } else if (newCity) { save.gold += 30; save.shards += 1; } updateWallet(); }
   else if (bonus && newPref) { celebrate('🗾', `はじめての地方！ ${reg.pref}`); addGold(100); addShard(3); toast(`${reg.pref} に初上陸！\nボーナス +100🪙 +3🔮`); }
   else if (bonus && newCity) { celebrate('🏙️', `はじめての町！ ${reg.city}${reg.ward ? ' ' + reg.ward : ''}`); addGold(30); addShard(1); toast(`${reg.city}${reg.ward ? ' ' + reg.ward : ''} に初上陸！\nボーナス +30🪙 +1🔮`); }
+  if (newPref) bumpXp(500); else if (newCity) bumpXp(100);
   if (newPref || newCity) { persist(); setTimeout(checkTitles, bonus === true ? 2800 : 0); setTimeout(processTotals, 2500); }
   return { newPref, newCity };
 }
@@ -540,6 +543,44 @@ function checkCityTiers() {
 }
 setTimeout(processTotals, 6000);
 
+// ---- デイリーミッション: 毎日3つ(歩く・名所・ほかの行動)。全部達成でボーナス ----
+const D = () => { const t = todayStr(); if (!save.daily || save.daily.date !== t) save.daily = { date: t, coins: 0, harvest: 0, built: 0, evo: 0, claimed: {}, bonus: false }; return save.daily; };
+const foundToday = () => Object.values(save.found).filter(f => f.date === todayStr()).length;
+const DAILY_POOL = {
+  walk: [{ id: 'walk1', name: '今日、1km歩く', goal: 1000, cur: () => save.today, gold: 60, shards: 1, xp: 200 }, { id: 'walk3', name: '今日、3km歩く', goal: 3000, cur: () => save.today, gold: 160, shards: 2, xp: 500 }],
+  poi: [{ id: 'poi1', name: '名所を1つ発見する', goal: 1, cur: foundToday, gold: 60, shards: 1, xp: 200 }, { id: 'poi3', name: '名所を3つ発見する', goal: 3, cur: foundToday, gold: 200, shards: 2, xp: 600 }],
+  misc: [{ id: 'coin20', name: 'コインを20枚ひろう', goal: 20, cur: () => D().coins, gold: 50, shards: 0, xp: 150 }, { id: 'harvest', name: '置いた物から収穫する', goal: 1, cur: () => D().harvest, gold: 50, shards: 0, xp: 150 },
+    { id: 'build1', name: '何か1つつくる', goal: 1, cur: () => D().built, gold: 40, shards: 0, xp: 150 }, { id: 'evo1', name: '物を1回進化させる', goal: 1, cur: () => D().evo, gold: 80, shards: 1, xp: 250 }],
+};
+function todaysMissions() {
+  let h = 0; for (const ch of todayStr()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;                  // 日付から決まる(その日は誰でも同じ)
+  return [DAILY_POOL.walk[h % 2], DAILY_POOL.poi[(h >> 1) % 2], DAILY_POOL.misc[(h >> 2) % 4]];
+}
+function checkDaily() {
+  const d = D(), ms = todaysMissions(); let claimed = false;
+  for (const m of ms) {
+    if (d.claimed[m.id] || m.cur() < m.goal) continue;
+    d.claimed[m.id] = true; claimed = true;
+    addGold(m.gold); if (m.shards) addShard(m.shards); addXp(m.xp);
+    toast(`📋 デイリー達成「${m.name}」\n+${m.gold}🪙${m.shards ? ` +${m.shards}🔮` : ''}`);
+  }
+  if (!d.bonus && ms.every(m => d.claimed[m.id])) {
+    d.bonus = true; claimed = true;
+    setTimeout(() => { celebrate('📋', 'デイリー全達成！'); toast('デイリーミッション全達成！\nボーナス +150🪙 +3🔮'); addGold(150); addShard(3); addXp(500); persistSoon(); }, 2200);
+  }
+  if (claimed) { updateWallet(); persistSoon(); }
+}
+function dailyHtml() {
+  const d = D(), ms = todaysMissions();
+  return '<ul>' + ms.map(m => {
+    const cur = Math.min(m.goal, Math.floor(m.cur())), pct = Math.round(cur / m.goal * 100), done = d.claimed[m.id];
+    const prog = m.goal >= 1000 ? `${(cur / 1000).toFixed(1)} / ${m.goal / 1000} km` : `${cur} / ${m.goal}`;
+    return `<li style="cursor:default"><span class="ic">${done ? '✅' : '📋'}</span><div><b>${esc(m.name)}</b><small>${prog} ・ 報酬 🪙${m.gold}${m.shards ? ' 🔮' + m.shards : ''}</small>` +
+      `<div class="dbar"><i style="width:${pct}%"></i></div></div></li>`;
+  }).join('') + `<li style="cursor:default"><span class="ic">${d.bonus ? '🎉' : '🎁'}</span><div><b>全部達成ボーナス</b><small>3つすべて達成で 🪙150 🔮3 ${d.bonus ? '(受け取り済み)' : ''}</small></div></li></ul>` +
+    '<div class="jp-note small">毎日0時に新しいミッションになります(「歩く」は、冒険モードの移動では数えません)</div>';
+}
+
 // ---- 称号(達成すると報酬。特別な物が解放される) ----
 const areaDone = a => a[2].every(p => save.regions.pref[p]);
 const TITLES = [
@@ -554,6 +595,20 @@ const TITLES = [
   { id: 'pref10', name: '県めぐり ★★', desc: '10の都道府県を訪れる', ok: () => nPref() >= 10, gold: 300, shards: 5 },
   { id: 'pref20', name: '県めぐり ★★★', desc: '20の都道府県を訪れる', ok: () => nPref() >= 20, gold: 800, shards: 8 },
   { id: 'pref47', name: '日本一周', desc: '47都道府県をすべて訪れる', ok: () => nPref() >= 47, gold: 3000, shards: 30 },
+  { id: 'lv10', name: 'Lv.10 到達', desc: 'レベル10になる', ok: () => curLevel() >= 10, gold: 300, shards: 3 },
+  { id: 'lv20', name: 'Lv.20 到達', desc: 'レベル20になる', ok: () => curLevel() >= 20, gold: 800, shards: 8 },
+  { id: 'lv30', name: 'Lv.30 到達', desc: 'レベル30になる', ok: () => curLevel() >= 30, gold: 2000, shards: 20 },
+  { id: 'build10', name: 'つくり手 見習い', desc: '物を10回つくる', ok: () => (save.stats.builds || 0) >= 10, gold: 100, shards: 1 },
+  { id: 'build50', name: 'つくり手 達人', desc: '物を50回つくる', ok: () => (save.stats.builds || 0) >= 50, gold: 300, shards: 3 },
+  { id: 'build100', name: 'つくり手 伝説', desc: '物を100回つくる', ok: () => (save.stats.builds || 0) >= 100, gold: 800, shards: 8 },
+  { id: 'evo5', name: '進化の使い手', desc: '物を5回進化させる', ok: () => (save.stats.evos || 0) >= 5, gold: 150, shards: 2 },
+  { id: 'evo20', name: '進化の名人', desc: '物を20回進化させる', ok: () => (save.stats.evos || 0) >= 20, gold: 500, shards: 5 },
+  { id: 'evo50', name: '進化の賢者', desc: '物を50回進化させる', ok: () => (save.stats.evos || 0) >= 50, gold: 1500, shards: 15 },
+  { id: 'kinds5', name: '名所めぐり 5種', desc: '5種類の名所を発見する', ok: () => new Set(Object.values(save.found).map(f => f.k)).size >= 5, gold: 120, shards: 2 },
+  { id: 'kinds10', name: '名所めぐり 10種', desc: '10種類の名所を発見する', ok: () => new Set(Object.values(save.found).map(f => f.k)).size >= 10, gold: 300, shards: 4 },
+  { id: 'kinds15', name: '名所コンプリート', desc: '15種類すべての名所を発見する', ok: () => new Set(Object.values(save.found).map(f => f.k)).size >= 15, gold: 800, shards: 8 },
+  { id: 'poi200', name: '名所ハンター 神話', desc: '名所を200か所発見する', ok: () => nFound() >= 200, gold: 1500, shards: 15 },
+  { id: 'poi500', name: '名所ハンター 永遠', desc: '名所を500か所発見する', ok: () => nFound() >= 500, gold: 4000, shards: 30 },
   { id: 'cityfull', name: '町のコンプリート', desc: '1つの市区町村の名所をすべて発見する', ok: () => Object.values(save.regions.city).some(c => (c.tier || 0) >= 4), gold: 800, shards: 8 },
   { id: 'morning1', name: '早起きさんぽ', desc: '朝5〜7時に合計500m歩く', ok: () => save.stats.morning >= 500, gold: 60, shards: 1 },
   { id: 'morning2', name: '朝活マスター', desc: '朝5〜7時に合計5km歩く', ok: () => save.stats.morning >= 5000, gold: 250, shards: 4 },
@@ -578,7 +633,7 @@ function checkTitles() {
   for (const t of TITLES) {
     if (save.titles[t.id] || !t.ok()) continue;
     save.titles[t.id] = todayStr();
-    setTimeout(() => { celebrate('🏅', `称号「${t.name}」`); toast(`称号「${t.name}」を獲得！\n報酬 +${t.gold}🪙${t.shards ? ` +${t.shards}🔮` : ''}${t.unlock ? '\n解放: ' + t.unlock : ''}`); addGold(t.gold); if (t.shards) addShard(t.shards); persist(); }, delay);
+    setTimeout(() => { addXp(150); celebrate('🏅', `称号「${t.name}」`); toast(`称号「${t.name}」を獲得！\n報酬 +${t.gold}🪙${t.shards ? ` +${t.shards}🔮` : ''}${t.unlock ? '\n解放: ' + t.unlock : ''}`); addGold(t.gold); if (t.shards) addShard(t.shards); persist(); }, delay);
     delay += 3000;
   }
   if (delay) persist();
@@ -613,18 +668,37 @@ function celebrate(emoji, text) {
   document.body.appendChild(box); setTimeout(() => box.remove(), 2600);
   try { navigator.vibrate && navigator.vibrate([80, 40, 80]); } catch (e) {}
 }
-const LEVELS = [[0, '見習い冒険者'], [500, '駆け出しの旅人'], [2000, '街道の旅人'], [6000, '熟練の冒険者'], [15000, '伝説の散歩家']];
+// レベル: 30段階の称号。その先も「散歩の神話 +1, +2…」と続く。必要な経験値は、Lv5までは 500/2000/6000/15000、その先は少しずつ増える
+const LV_NAMES = ['見習い冒険者', '駆け出しの旅人', '街道の旅人', '熟練の冒険者', '伝説の散歩家', '路地の探検家', '坂道の挑戦者', '川沿いの旅人', '峠の越え人', '町の案内人',
+  '森の守り人', '港の渡り鳥', '古道の語り部', '星読みの旅人', '朝霧の踏破者', '風の足跡', '季節の旅人', '灯火の導き手', '名所の賢者', '大地の放浪者',
+  '地図の描き手', '雲上の散歩者', '時の旅人', '虹の架け橋', '世界の歩み手', '伝承の継ぎ手', '大いなる冒険家', '天空の旅人', '星間の散歩者', '散歩の神話'];
+const lvThreshold = n => { if (n < 5) return [0, 500, 2000, 6000, 15000][n]; let t = 15000; for (let k = 5; k <= n; k++) t += 8000 + (k - 5) * 3000; return t; };
+const lvName = n => LV_NAMES[n] || `${LV_NAMES[LV_NAMES.length - 1]} +${n - LV_NAMES.length + 1}`;
+const xpNow = () => save.total + nFound() * 300 + (save.xp || 0);       // 経験値 = 歩いた距離(m) + 名所×300 + いろいろな行動
+function levelInfo() { const xp = xpNow(); let lv = 0; while (xp >= lvThreshold(lv + 1)) lv++; return { xp, lv, cur: lvThreshold(lv), next: lvThreshold(lv + 1) }; }
+const curLevel = () => levelInfo().lv + 1;                             // 1から数える
+function addXp(n) { save.xp = (save.xp || 0) + Math.round(n); updateLevel(); }
 let lastLv = null;
 function updateLevel() {
-  const xp = save.total + Object.keys(save.found).length * 300;
-  let lv = 0; for (let k = 0; k < LEVELS.length; k++) if (xp >= LEVELS[k][0]) lv = k;
-  const next = LEVELS[lv + 1];
-  $('lvl-name').textContent = `Lv.${lv + 1} ${LEVELS[lv][1]}`;
-  $('lvl-fill').style.width = (next ? (xp - LEVELS[lv][0]) / (next[0] - LEVELS[lv][0]) * 100 : 100) + '%';
-  $('lvl-next').textContent = next ? `次まで${Math.ceil(next[0] - xp)}pt` : 'MAX';
-  const up = lastLv !== null && lv > lastLv; lastLv = lv;
-  if (up) { celebrate('🎖️', `レベルアップ！ ${LEVELS[lv][1]}`); addGold(50); addShard(1); }
+  const { xp, lv, cur, next } = levelInfo();
+  $('lvl-name').textContent = `Lv.${lv + 1} ${lvName(lv)}`;
+  $('lvl-fill').style.width = ((xp - cur) / (next - cur) * 100) + '%';
+  $('lvl-next').textContent = `次まで${Math.ceil(next - xp)}pt`;
+  if (save.lvDone == null) save.lvDone = Math.min(lv, 4);                // 以前の保存データ: Lv5までは受け取り済みとして、それより上がっていれば、まとめて受け取る
+  if (lv > save.lvDone) {
+    const from = save.lvDone; let gold = 0, shards = 0;
+    for (let n = from + 1; n <= lv; n++) { gold += 30 + 20 * (n + 1); shards += 1 + ((n + 1) % 5 === 0 ? 3 : 0); }
+    const opened = ITEMS.filter(i => i.minLv && i.minLv > from + 1 && i.minLv <= lv + 1).map(i => i.chain[0][1]);
+    save.lvDone = lv;
+    setTimeout(() => {
+      celebrate('🎖️', `レベルアップ！ Lv.${lv + 1} ${lvName(lv)}`);
+      toast(`Lv.${lv + 1} ${lvName(lv)}\n報酬 +${gold}🪙 +${shards}🔮${opened.length ? '\n解放: ' + opened.join('・') : ''}`);
+      addGold(gold); addShard(shards); persist();
+    }, lastLv === null ? 1800 : 0);
+  }
+  lastLv = lv;
 }
+
 // ---- 時間帯: 光の向きと色、空、太陽と月 ----
 // [時刻, 光の色, 強さ, 方位, 高さ, 空(上)の色rgb+alpha, 夜の度合い]
 const SKY = [
@@ -723,9 +797,10 @@ function pickCoins(accuracy) {
   for (const c of [...save.coins]) {
     if (dist(c, me) > range) continue;
     save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id);
-    if (c.k === 'shard') { addShard(1); continue; }
+    if (c.k === 'shard') { addShard(1); addXp(10); continue; }
     const luck = Math.min(0.9, save.built.filter(o => ITEM[o.t].lucky && dist(o, c) <= 200).reduce((s, o) => s + 0.15 * lvOf(o), 0));
     if (Math.random() < luck) { floatText('🍀ご利益 2倍！'); addGold(c.v * 2); } else addGold(c.v);
+    D().coins += c.v; addXp(c.v);
   }
 }
 function floatText(text) {
@@ -733,7 +808,7 @@ function floatText(text) {
   const d = document.createElement('div'); d.className = 'float'; d.textContent = text;
   d.style.left = p.x + 'px'; d.style.top = (p.y - 50) + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1200);
 }
-const updateWallet = () => { $('coins').textContent = `🪙 ${save.gold}  🔮 ${save.shards}  👣 ${Math.floor(save.ap)}`; };
+const updateWallet = () => { $('coins').textContent = `🪙 ${save.gold}  🔮 ${save.shards}  👣 ${Math.floor(save.ap)}  📋${Object.keys(D().claimed).length}/3`; };
 function addShard(n) { save.shards += n; updateWallet(); floatText(`${n > 0 ? '+' : ''}${n}🔮`); if (n > 0) try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} }
 function addGold(n) {
   save.gold += n; updateWallet();
@@ -756,8 +831,14 @@ const ITEMS = [
   { id: 'tower', cost: 150, rate: 3, magnet: 2, role: '遠くからコインを呼び寄せる', chain: [['🗼', 'ひかりの塔'], ['🔭', '星見の塔'], ['🛸', '天空港']] },
   { id: 'monument', cost: 40, rate: 4, role: '旅の記念。立ち寄るとコインがたまる', locked: () => !save.titles.pref3, lockText: '「県めぐり ★」(3都道府県を訪れる)で解放', chain: [['🗿', '石碑'], ['🗿', '記念碑'], ['🏆', '黄金像']] },
   { id: 'rainbow', cost: 100, rate: 6, role: '虹の根元にコインがたまる', locked: () => !Object.keys(save.titles).some(k => k.startsWith('area-')), lockText: '最初の「地方制覇」で解放', chain: [['🌈', '小さな虹'], ['🌈', '大きな虹'], ['🌈', '七色のアーチ']] },
+  { id: 'farm', cost: 25, rate: 2.5, minLv: 3, role: '作物が育って、コインに変わる', chain: [['🥕', '畑'], ['🍎', '果樹園'], ['🌾', '黄金の畑']] },
+  { id: 'ranch', cost: 90, rate: 7, minLv: 5, role: '動物たちが、コインを運んでくる', chain: [['🐔', 'ニワトリ小屋'], ['🐄', '牧場'], ['🐑', 'ふれあい牧場']] },
+  { id: 'windmill', cost: 130, rate: 6, minLv: 7, role: '風を受けて、コインを回す', chain: [['🌬️', '風車'], ['🌬️', '大きな風車'], ['🌷', '風車の丘']] },
+  { id: 'lighthouse', cost: 220, rate: 5, magnet: 2, minLv: 10, role: '遠くのコインを、光で呼び寄せる', chain: [['🗼', '灯台'], ['🗼', '高い灯台'], ['🌟', '大灯台']] },
+  { id: 'funfair', cost: 420, rate: 28, minLv: 14, role: 'にぎわいが、たくさんのコインを生む', chain: [['🎠', 'メリーゴーランド'], ['🎡', '観覧車'], ['🎪', '遊園地']] },
   { id: 'castle', cost: 300, rate: 20, role: '税収がたっぷりたまる', chain: [['🏰', 'おしろ'], ['🏯', '大きなおしろ'], ['👑', '王国']] },
 ];
+ITEMS.forEach(i => { if (i.minLv && !i.locked) { i.locked = () => curLevel() < i.minLv; i.lockText = `Lv.${i.minLv} で解放`; } });
 const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
 const lvOf = o => o.lv || 1;
 const face = o => ITEM[o.t].chain[lvOf(o) - 1];                 // [絵文字, 名前]
@@ -765,7 +846,7 @@ const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1];
 const evoCost = o => ITEM[o.t].cost * (lvOf(o) === 1 ? 2 : 4);
 const accrued = o => Math.min(HARVEST_CAP_H, (Date.now() - o.last) / 3600e3) * rateOf(o);
 const BUILD_RANGE = 40, MAX_BUILT = 300, SHARD_PRICE = 60;
-const SIZE = { monument: 56, rainbow: 66, flower: 46, tree: 56, rest: 50, lantern: 50, fountain: 58, shrine: 60, house: 62, tower: 68, castle: 72 };   // イラストの大きさ(px)
+const SIZE = { farm: 54, ranch: 60, windmill: 62, lighthouse: 70, funfair: 72, monument: 56, rainbow: 66, flower: 46, tree: 56, rest: 50, lantern: 50, fountain: 58, shrine: 60, house: 62, tower: 68, castle: 72 };   // イラストの大きさ(px)
 const builtMarkers = new Map();
 let placing = null;
 
@@ -817,6 +898,7 @@ function placeAt(ll) {
   const o = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), t: it.id, lat: ll.lat, lng: ll.lng, d: todayStr(),
     lv: 1, last: Date.now(), days: 1, lastDay: todayStr(), spent: it.cost };
   save.built.push(o); addBuiltMarker(o, true); addGold(-it.cost);
+  save.stats.builds = (save.stats.builds || 0) + 1; D().built++; addXp(it.cost / 2); checkDaily();
   toast(`${face(o)[0]} ${face(o)[1]}をつくった！\n歩いて通うと育って、進化します`); stopPlacing(); persist(); updateHud();
 }
 // 近くに行くと、たまったコインを収穫する
@@ -827,6 +909,7 @@ function visitBuilt() {
     const a = accrued(o);
     if (a >= 1) { const n = Math.floor(a); o.last = Date.now() - (a - n) / rateOf(o) * 3600e3; got += n; parts.push(`${face(o)[0]}+${n}`); }
   }
+  if (got) { D().harvest++; addXp(got / 4); }
   if (parts.length) { if (got) addGold(got); toast('🌾 ' + parts.join('  ')); refreshBuilt(); }
 }
 // 進化: 「進化のかけら」と「コイン」が必要(場所は問わない)
@@ -853,6 +936,7 @@ function openObj(o) {
   eb.onclick = () => {
     if (!evolveCheck(o).ok) return;
     const cost = evoCost(o); addGold(-cost); addShard(-EVO_SHARDS[lv]); o.spent += cost; o.lv = lv + 1;
+    save.stats.evos = (save.stats.evos || 0) + 1; D().evo++; addXp(cost / 2); checkDaily();
     refreshBuilt(); celebrate(ART.item(o.t, o.lv, 104), `${face(o)[1]}に進化！`); persist(); updateHud(); $('obj').hidden = true;
   };
   $('obj-del').textContent = `とりこわす (+${refund}🪙)`;
@@ -1312,7 +1396,8 @@ function renderBook() {
   $('book-sum').innerHTML = `🗾 ${nPref()}都道府県 ・ 🏙️ ${nCity()}市区町村 ・ ⛩️ ${items.length}名所 ・ 🏅 ${Object.keys(save.titles).length}/${TITLES.length}<br>🏗️ つくったもの ${save.built.length}個 ／ 🪙 ${save.gold} ／ 🔮 ${save.shards}`;
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === bookTab));
   let html = '';
-  if (bookTab === 'map') html = japanMapHtml(items);
+  if (bookTab === 'daily') html = dailyHtml();
+  else if (bookTab === 'map') html = japanMapHtml(items);
   else if (bookTab === 'titles') html = titlesHtml();
   else if (bookTab === 'recent') html = items.length ? '<ul>' + items.map(bookItem).join('') + '</ul>' : '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
   else {
@@ -1349,6 +1434,7 @@ function renderBook() {
   });
 }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { bookTab = b.dataset.tab; renderBook(); });
+$('coins').onclick = () => { bookTab = 'daily'; $('btn-book').onclick(); };
 $('btn-book').onclick = () => { bookFresh = true; renderBook(); $('book').hidden = false; processRegions().then(() => { if (!$('book').hidden) renderBook(); }); };
 $('book-close').onclick = () => { $('book').hidden = true; };
 
@@ -1387,6 +1473,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
   }
   revealAround(ll); maintainCoins(); pickCoins(accuracy); visitBuilt(); maybeFetchPois(); checkFound(); maybeRegionVisit(); updateHint(); persistSoon(); updateHud();
   if (now - weather.at > 30 * 60e3) fetchWeather();
+  checkDaily();
   if (now - (updatePosition.titleAt || 0) > 15000) { updatePosition.titleAt = now; checkTitles(); }
   if (placing) showPlaceCircle();
   updateWallet();
@@ -1407,4 +1494,4 @@ else {
 }
 save.coins.forEach(addCoinMarker);
 save.built.forEach(o => addBuiltMarker(o, false));
-updateWallet(); updateHud();
+updateWallet(); updateHud(); gameReady = true;

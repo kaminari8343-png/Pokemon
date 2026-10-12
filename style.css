@@ -174,3 +174,15 @@ svg.jp text{font-size:8px}
 .ghost{position:relative;text-align:center;width:54px;pointer-events:auto}
 .ghost .sp{display:block;line-height:0;opacity:.75;filter:grayscale(.35) drop-shadow(0 0 8px #8fd3ff);animation:bob .9s ease-in-out infinite alternate}
 .ghost b{display:inline-block;font-size:10px;line-height:1.15;color:#10324a;background:#bfe6ff;border-radius:8px;padding:1px 6px;margin-top:2px}
+
+#coins{cursor:pointer}
+.dbar{height:7px;background:#e6d9b0;border-radius:4px;overflow:hidden;margin-top:4px}
+.dbar i{display:block;height:100%;background:linear-gradient(90deg,#ffd873,#ff9ecb)}
+.tabs button{font-size:11.5px;padding:7px 1px}
+
+/* レベルバー: 1段目にお金・👣・デイリー、2段目にレベルと経験値 */
+#lvl{flex-wrap:wrap;row-gap:3px}
+#coins{flex:1 1 100%;font-size:13px}
+#lvl-name,#lvl small{white-space:nowrap}
+#hint{top:142px}
+#toast{top:182px}
