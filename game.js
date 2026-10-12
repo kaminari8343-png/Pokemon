@@ -885,7 +885,7 @@ function advTick() {
 }
 
 // ---- GPSログの取り込み(GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴JSON) ----
-const IMP_MAX_SPEED = 6, IMP_GAP = 300;     // 秒速6m超(車・電車)は除く / 時刻が無いときは300mまでの間隔だけつなぐ
+const IMP_MAX_JUMP = 150000;                // 取り込みに速度の制限はない(電車・車の移動もそのまま記録)。ただしデータの穴で150km以上飛ぶ区間は、線でつながない(飛行機など)
 const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 function parseTracks(text) {
   const t = text.trim(), out = [];
@@ -930,7 +930,7 @@ function parseTracks(text) {
   }
   return out.filter(tr => tr.length > 1);
 }
-// 歩いた区間だけを20mごとの点にする(車・電車などの速い移動や、飛んだ区間はつなげない)
+// 記録された道すじを、一定の間隔(20m、長い区間は50m)の点にする。取り込みでは速度の制限はなく、記録のとおりに反映する
 function buildSamples(tracks) {
   const samples = [], byDay = {}; let total = 0, morning = 0, night = 0;
   for (let tr of tracks) {
@@ -938,11 +938,10 @@ function buildSamples(tracks) {
     let prev = null;
     for (const p of tr) {
       if (!prev) { samples.push(p); prev = p; continue; }
-      const d = dist(prev, p), dt = prev.t && p.t ? (p.t - prev.t) / 1000 : null;
-      const ok = dt != null ? (dt > 0 ? d / dt <= IMP_MAX_SPEED && dt <= 3600 : d < 5) : d <= IMP_GAP;
-      if (!ok) { samples.push(p); prev = p; continue; }
+      const d = dist(prev, p);
+      if (d > IMP_MAX_JUMP) { samples.push(p); prev = p; continue; }      // 極端に離れた点は、つなげず新しい区間にする
       if (d < 3) continue;
-      const n = Math.max(1, Math.round(d / 20));
+      const n = Math.max(1, Math.round(d / (d > 2000 ? 50 : 20)));
       for (let k = 1; k <= n; k++) { const f = k / n; samples.push({ lat: prev.lat + (p.lat - prev.lat) * f, lng: prev.lng + (p.lng - prev.lng) * f, t: prev.t && p.t ? prev.t + (p.t - prev.t) * f : null }); }
       total += d;
       if (prev.t) { const dd = new Date(prev.t), h = dd.getHours(); byDay[dateStr(dd)] = (byDay[dateStr(dd)] || 0) + d; if (h >= 5 && h < 7) morning += d; if (h >= 21 || h < 4) night += d; }
@@ -961,7 +960,7 @@ async function importFile(file) {
   let tracks; try { tracks = parseTracks(await file.text()); } catch (e) { return log(`⚠️ ${file.name}: ${e.message || '読み取れませんでした'}`); }
   if (!tracks.length) return log(`⚠️ ${file.name}: 道すじが見つかりませんでした`);
   const r = buildSamples(tracks);
-  if (r.samples.length < 2 || r.total < 50) return log(`⚠️ ${file.name}: 歩いた道すじが短い(または移動が速すぎる)ため取り込めません`);
+  if (r.samples.length < 2 || r.total < 50) return log(`⚠️ ${file.name}: 道すじが短すぎるため取り込めません`);
   const s0 = r.samples[0], fp = `${r.samples.length}|${s0.lat.toFixed(4)},${s0.lng.toFixed(4)}|${Math.round(r.total)}`;
   if (save.importFp.includes(fp)) return log(`ℹ️ ${file.name} は取り込み済みです`);
   save.importFp.push(fp);
