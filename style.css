@@ -3,7 +3,10 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 #tint{position:absolute;inset:0;z-index:450;pointer-events:none;box-shadow:inset 0 0 120px rgba(40,20,70,.6);transition:background 2s}
 #fog,#fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #fog{z-index:500}#fx{z-index:520}
-#haze{position:absolute;left:0;right:0;top:0;height:34%;z-index:530;pointer-events:none;background:linear-gradient(rgba(36,28,84,.92),rgba(36,28,84,0))}
+#haze{position:absolute;left:0;right:0;top:0;height:38%;z-index:530;pointer-events:none;background:linear-gradient(rgba(36,28,84,.92),rgba(36,28,84,0))}
+#sun{position:absolute;z-index:531;pointer-events:none;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;opacity:.95;transition:left 3s,top 3s}
+#sun.sun{background:radial-gradient(circle,#fffbe0 0 30%,rgba(255,226,130,.85) 50%,rgba(255,200,100,0) 72%)}
+#sun.moon{width:46px;height:46px;margin:-23px 0 0 -23px;background:radial-gradient(circle at 38% 38%,#fff 0,#eef0ff 55%,#c9cff0 100%);box-shadow:0 0 22px 8px rgba(190,200,255,.45)}
 .maplibregl-marker{z-index:600}
 .maplibregl-ctrl-attrib{font-size:10px}
 
@@ -30,24 +33,26 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 
 /* ピン(立体の地図の上に立つ) */
 .pin{text-align:center;line-height:1;cursor:pointer}
+.pin svg{display:block}
 .pin .sh{position:absolute;left:50%;bottom:-3px;width:34px;height:10px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,.5),transparent 70%)}
-.hero{pointer-events:none;position:relative;width:46px;height:56px}
-.hero .sp{position:absolute;left:0;right:0;top:0;font-size:34px;display:block;animation:bob .7s ease-in-out infinite alternate;filter:drop-shadow(0 3px 3px rgba(0,0,0,.5))}
+.hero{pointer-events:none;position:relative;width:56px;height:60px}
+.hero .sp{position:absolute;left:0;right:0;top:-8px;display:block;line-height:0;animation:bob .7s ease-in-out infinite alternate;filter:drop-shadow(0 3px 3px rgba(0,0,0,.5))}
 .hero .ring{position:absolute;left:50%;bottom:-6px;width:44px;height:16px;margin-left:-22px;border-radius:50%;
   border:2px solid rgba(255,230,150,.9);box-shadow:0 0 14px #ffd873,inset 0 0 8px rgba(255,216,115,.6);animation:ring 1.8s ease-out infinite}
 @keyframes ring{from{transform:scale(.6);opacity:1}to{transform:scale(1.7);opacity:0}}
 @keyframes bob{to{transform:translateY(-6px)}}
-.coin{position:relative;width:34px;height:42px}
-.coin .c{position:absolute;left:0;right:0;top:4px;font-size:26px;display:block;animation:spin 1.6s linear infinite,hover 1.2s ease-in-out infinite alternate;filter:drop-shadow(0 0 8px #ffd873)}
+.coin{position:relative;width:38px;height:46px}
+.coin .c{position:absolute;left:0;right:0;top:4px;display:block;line-height:0;animation:spin 1.6s linear infinite,hover 1.2s ease-in-out infinite alternate;filter:drop-shadow(0 0 8px #ffd873)}
 @keyframes spin{50%{transform:scaleX(.2)}}
 @keyframes hover{from{top:4px}to{top:-2px}}
 .obj{position:relative;display:flex;flex-direction:column;align-items:center}
-.obj .sp{display:block;font-size:34px;line-height:1;filter:drop-shadow(0 4px 3px rgba(0,0,0,.45));position:relative;z-index:1}
+.obj .sp{display:block;line-height:0;filter:drop-shadow(0 4px 3px rgba(0,0,0,.45));position:relative;z-index:1}
 .obj .base{width:54px;height:20px;margin-top:-10px;border-radius:50%;
   background:radial-gradient(ellipse at 50% 35%,#a9de80,#5f9a4a 72%);box-shadow:0 4px 0 #8b6b3e,0 8px 10px rgba(0,0,0,.35)}
 .obj.found .base{background:radial-gradient(ellipse at 50% 35%,#f1e2b4,#b9a06a 72%)}
 .obj.unk .base{background:radial-gradient(ellipse at 50% 35%,#b79bff,#5b3fa8 72%);box-shadow:0 4px 0 #3b2878,0 0 16px #a07cff}
-.obj.unk .sp{color:#fff;text-shadow:0 0 8px #ffd873,0 0 16px #ffd873;animation:pulse 1.6s infinite;font-size:30px}
+.obj.unk .sp{animation:pulse 1.6s infinite}
+.obj.unk .q{font-size:30px;line-height:1;color:#fff;text-shadow:0 0 8px #ffd873,0 0 16px #ffd873}
 @keyframes pulse{50%{transform:scale(1.2) translateY(-4px)}}
 .obj .nm{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;font-size:11px;font-weight:700;color:#3a2a10;
   background:rgba(255,246,220,.94);border-radius:8px;padding:1px 7px;white-space:nowrap}
@@ -58,6 +63,7 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 
 /* 演出 */
 .pop{position:fixed;left:50%;top:36%;z-index:3000;pointer-events:none;text-align:center;transform:translateX(-50%);animation:popin 2.5s ease-out forwards}
+.pop .big svg{width:104px;height:104px}
 .pop .big{font-size:84px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));animation:zoom .6s cubic-bezier(.2,1.6,.4,1)}
 .pop .txt{display:inline-block;margin-top:6px;background:linear-gradient(90deg,#ffd873,#ff9ecb);color:#3a2a10;font-weight:700;padding:8px 16px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
 .pop .cf{position:absolute;left:50%;top:40px;font-size:22px;animation:burst 1.4s ease-out forwards}
@@ -92,3 +98,8 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 .card button.danger{background:#b3402a;margin-bottom:8px}
 #obj-evo{margin-bottom:8px;background:#2f7d4f}
 #obj-evo:disabled{background:#8a8a7a;opacity:.85}
+
+.ic{display:inline-block;vertical-align:middle;line-height:0}
+#build-list button b{display:block;line-height:0;margin-bottom:2px}
+#build-list button .mini{display:flex;gap:2px;justify-content:center;line-height:0;opacity:.85}
+#obj-title .ic{margin-right:6px}

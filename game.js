@@ -21,7 +21,8 @@ function dist(a, b) {                       // a,b = {lat,lng}  (m)
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * RAD) * Math.cos(b.lat * RAD) * Math.sin(dLng / 2) ** 2;
   return 2 * R_EARTH * Math.asin(Math.sqrt(h));
 }
-const hourNow = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
+const HOUR_OVERRIDE = parseFloat(new URLSearchParams(location.search).get('hour'));   // 例: ?hour=18 で夕方を確認
+const hourNow = () => { if (!isNaN(HOUR_OVERRIDE)) return HOUR_OVERRIDE; const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
 const isNight = () => { const h = hourNow(); return h < 5 || h >= 19; };
 
 // ---- 保存データ ----
@@ -61,11 +62,16 @@ function buildStyle() {
       { id: 'bg', type: 'background', paint: { 'background-color': '#eadcb6' } },
       { id: 'landcover', type: 'fill', ...S, 'source-layer': 'landcover', paint: { 'fill-color': ['match', ['get', 'class'],
         'grass', '#c4dd93', 'wood', '#8dc07a', 'farmland', '#dbdf9d', 'sand', '#f3e3aa', 'wetland', '#a8d3b2', 'ice', '#f6faff', 'rock', '#d8cbb2', '#cfe1a2'] } },
+      { id: 'grass-tex', type: 'fill', ...S, 'source-layer': 'landcover', filter: ['in', 'class', 'grass', 'farmland'], paint: { 'fill-pattern': 'tex-grass', 'fill-opacity': 0.9 } },
+      { id: 'wood-tex', type: 'fill', ...S, 'source-layer': 'landcover', filter: ['==', 'class', 'wood'], paint: { 'fill-pattern': 'tex-wood' } },
       { id: 'landuse', type: 'fill', ...S, 'source-layer': 'landuse', paint: { 'fill-opacity': 0.85, 'fill-color': ['match', ['get', 'class'],
         'residential', '#f0e1be', 'commercial', '#eed9b3', 'industrial', '#e2d3c0', 'cemetery', '#b8d3a4', 'hospital', '#f4d3d3',
         'school', '#f2e7b6', 'pitch', '#b6dc8e', 'playground', '#cfe5a2', 'stadium', '#dad4c1', 'railway', '#e0d4c2', '#eadcb6'] } },
       { id: 'park', type: 'fill', ...S, 'source-layer': 'park', paint: { 'fill-color': '#a6d68a', 'fill-opacity': 0.92 } },
+      { id: 'park-tex', type: 'fill', ...S, 'source-layer': 'park', paint: { 'fill-pattern': 'tex-park' } },
       { id: 'water', type: 'fill', ...S, 'source-layer': 'water', paint: { 'fill-color': '#6cc1dc' } },
+      { id: 'water-wave-a', type: 'fill', ...S, 'source-layer': 'water', paint: { 'fill-pattern': 'tex-wave', 'fill-opacity': 0.5 } },
+      { id: 'water-wave-b', type: 'fill', ...S, 'source-layer': 'water', paint: { 'fill-pattern': 'tex-wave', 'fill-opacity': 0.3 } },
       { id: 'water-edge', type: 'line', ...S, 'source-layer': 'water', paint: { 'line-color': '#4aa3c8', 'line-width': 1.4, 'line-opacity': 0.8 } },
       { id: 'waterway', type: 'line', ...S, 'source-layer': 'waterway', paint: { 'line-color': '#6cc1dc', 'line-width': wRoad(0.6, 2, 4, 8) } },
       { id: 'road-minor-casing', type: 'line', ...S, 'source-layer': 'transportation', minzoom: 13,
@@ -84,6 +90,7 @@ function buildStyle() {
         layout: { 'line-cap': 'round' }, paint: { 'line-color': '#b98a56', 'line-width': wRoad(0.5, 1.2, 2.4, 6), 'line-dasharray': [1.5, 1.5] } },
       { id: 'rail', type: 'line', ...S, 'source-layer': 'transportation', minzoom: 12, filter: ['==', 'class', 'rail'],
         paint: { 'line-color': '#8d7c6c', 'line-width': wRoad(0.6, 1.4, 2.6, 6), 'line-dasharray': [3, 2] } },
+      { id: 'building-shadow', type: 'fill', ...S, 'source-layer': 'building', minzoom: 15, paint: { 'fill-color': 'rgba(60,30,100,0.30)', 'fill-translate': [7, 9] } },
       { id: 'building', type: 'fill-extrusion', ...S, 'source-layer': 'building', minzoom: 14, paint: {
         'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 8],
           0, '#f7d5b0', 15, '#f1b59d', 40, '#d2a6d8', 100, '#9faae9'],
@@ -114,6 +121,30 @@ const map = new maplibregl.Map({
 });
 map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 let mapReady = false;
+// 地面の模様(芝・森・公園の木々・波)を小さな絵から作る
+function makeTexture(id) {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  let seed = id.length * 7919 + 13; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const wrap = fn => { for (const dx of [-64, 0, 64]) for (const dy of [-64, 0, 64]) fn(dx, dy); };
+  const tuft = (x, y, col) => wrap((dx, dy) => { g.strokeStyle = col; g.lineWidth = 1.5; g.lineCap = 'round'; g.beginPath();
+    g.moveTo(x + dx - 2, y + dy); g.lineTo(x + dx - 3.5, y + dy - 5); g.moveTo(x + dx, y + dy); g.lineTo(x + dx, y + dy - 7); g.moveTo(x + dx + 2, y + dy); g.lineTo(x + dx + 3.5, y + dy - 5); g.stroke(); });
+  const canopy = (x, y, r, light, dark) => wrap((dx, dy) => {
+    g.fillStyle = 'rgba(30,60,40,.28)'; g.beginPath(); g.ellipse(x + dx + r * 0.35, y + dy + r * 0.55, r, r * 0.6, 0, 0, 7); g.fill();
+    g.fillStyle = dark; g.beginPath(); g.arc(x + dx, y + dy, r, 0, 7); g.fill();
+    g.fillStyle = light; g.beginPath(); g.arc(x + dx - r * 0.25, y + dy - r * 0.25, r * 0.62, 0, 7); g.fill(); });
+  if (id === 'tex-grass') for (let k = 0; k < 32; k++) tuft(rnd() * 64, rnd() * 64, rnd() < 0.5 ? 'rgba(255,255,255,.38)' : 'rgba(70,130,50,.4)');
+  else if (id === 'tex-park') { for (let k = 0; k < 20; k++) tuft(rnd() * 64, rnd() * 64, rnd() < 0.5 ? 'rgba(255,255,255,.35)' : 'rgba(60,120,50,.4)'); for (let k = 0; k < 3; k++) canopy(rnd() * 64, rnd() * 64, 6 + rnd() * 3, '#86d46f', '#4f9f4a'); }
+  else if (id === 'tex-wood') for (let k = 0; k < 10; k++) canopy(rnd() * 64, rnd() * 64, 9 + rnd() * 4, '#70c05b', '#3f8f45');
+  else if (id === 'tex-wave') { g.strokeStyle = 'rgba(255,255,255,.65)'; g.lineWidth = 2; g.lineCap = 'round';
+    for (let k = 0; k < 5; k++) { const y = 6 + k * 13 + rnd() * 4, x = rnd() * 36; wrap((dx, dy) => { g.beginPath(); g.moveTo(x + dx, y + dy); g.quadraticCurveTo(x + dx + 7, y + dy - 5, x + dx + 14, y + dy); g.quadraticCurveTo(x + dx + 21, y + dy + 5, x + dx + 28, y + dy); g.stroke(); }); } }
+  map.addImage(id, g.getImageData(0, 0, 64, 64), { pixelRatio: 2 });
+}
+map.on('styleimagemissing', e => { if (e.id.startsWith('tex-') && !map.hasImage(e.id)) makeTexture(e.id); });
+let waterAt = 0;
+function animWater(t) {   // 水面の波をゆっくり流す
+  if (!mapReady || t - waterAt < 140) return; waterAt = t;
+  try { map.setPaintProperty('water-wave-a', 'fill-translate', [(t / 60) % 32, (t / 130) % 32]); map.setPaintProperty('water-wave-b', 'fill-translate', [-(t / 85) % 32, (t / 100) % 32]); } catch (e) {}
+}
 function setSrc(id, data) { try { const s = map.getSource(id); if (s) s.setData(data); } catch (e) {} }
 map.on('load', () => { mapReady = true; drawTrail(); showPlaceCircle(); });
 // ベクター地図が読み込めないときは、簡易な画像の地図に切り替える
@@ -183,7 +214,8 @@ function drawFog() {
 
 // ---- 星・花・ちょうちょ・舞う花びら/ほたる ----
 const hsh = (i, j, s) => { let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(s, 1442695041); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
-const DECOR = ['🌸', '🌼', '🍄', '🌿', '🍀', '🐞', '🌷'];
+const svgImg = s => { const i = new Image(); i.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(s); return i; };
+const decorImgs = ART.decorSvgs.map(svgImg), butterflyImg = svgImg(ART.butterfly());
 let stars = [], decor = [], fxCenter = null, fxVer = -1, fxAt = 0;
 function rebuildFx() {
   const c = map.getCenter(), now = performance.now();
@@ -196,7 +228,7 @@ function rebuildFx() {
     const lat = (i + 0.5) * dLat, dl = dLng(lat), j0 = Math.floor((c.lng - R / (111320 * Math.cos(c.lat * RAD))) / dl), j1 = Math.floor((c.lng + R / (111320 * Math.cos(c.lat * RAD))) / dl);
     for (let j = j0; j <= j1; j++) {
       const a = hsh(i, j, 1), b = hsh(i, j, 6);
-      if (a < 0.02) { if (explored.has(i + ',' + j)) decor.push({ lat: lat + (hsh(i, j, 2) - 0.5) * dLat, lng: (j + 0.5) * dl + (hsh(i, j, 3) - 0.5) * dl, e: DECOR[Math.floor(hsh(i, j, 4) * DECOR.length)], p: hsh(i, j, 5) * 6.28 }); }
+      if (a < 0.02) { if (explored.has(i + ',' + j)) decor.push({ lat: lat + (hsh(i, j, 2) - 0.5) * dLat, lng: (j + 0.5) * dl + (hsh(i, j, 3) - 0.5) * dl, e: Math.floor(hsh(i, j, 4) * decorImgs.length), p: hsh(i, j, 5) * 6.28 }); }
       else if (b < 0.06 && !explored.has(i + ',' + j)) stars.push({ lat: lat + (hsh(i, j, 8) - 0.5) * dLat, lng: (j + 0.5) * dl + (hsh(i, j, 7) - 0.5) * dl, s: 1 + hsh(i, j, 9) * 2, p: hsh(i, j, 10) * 6.28 });
     }
   }
@@ -212,11 +244,14 @@ function drawFx(t) {
   fctx.globalAlpha = 1; fctx.font = '17px serif';
   for (const d of decor) {
     const p = map.project([d.lng, d.lat]); if (p.x < -20 || p.x > cssW + 20 || p.y < -20 || p.y > cssH + 20) continue;
-    fctx.fillText(d.e, p.x + Math.sin(t / 900 + d.p) * 2, p.y - 8 + Math.cos(t / 1100 + d.p) * 1.5);
+    const im = decorImgs[d.e]; if (im.complete) fctx.drawImage(im, p.x - 11 + Math.sin(t / 900 + d.p) * 1.5, p.y - 20 + Math.cos(t / 1100 + d.p), 22, 22);
   }
   if (avatar) {
     const c = map.project([avatar.lng, avatar.lat]); fctx.font = '17px serif';
-    for (let k = 0; k < 3; k++) { const a = t / 1000 * (0.8 + k * 0.3) + k * 2.1, rr = 38 + k * 12; fctx.fillText('🦋', c.x + Math.cos(a) * rr, c.y - 30 + Math.sin(a * 1.3) * rr * 0.5); }
+    if (butterflyImg.complete) for (let k = 0; k < 3; k++) {
+      const a = t / 1000 * (0.8 + k * 0.3) + k * 2.1, rr = 38 + k * 12, w = 22 * (0.35 + 0.65 * Math.abs(Math.sin(t / 90 + k * 2)));
+      fctx.drawImage(butterflyImg, c.x + Math.cos(a) * rr - w / 2, c.y - 40 + Math.sin(a * 1.3) * rr * 0.5, w, 22);
+    }
   }
   const night = isNight();
   for (const q of parts) {
@@ -243,7 +278,7 @@ function frame(t) {
     if (meMarker) meMarker.setLngLat([avatar.lng, avatar.lat]);
     if (follow) { const c = map.getCenter(); if (Math.abs(c.lat - avatar.lat) > 1e-8 || Math.abs(c.lng - avatar.lng) > 1e-8) map.jumpTo({ center: [avatar.lng, avatar.lat] }); }
   }
-  try { drawFog(); rebuildFx(); drawFx(t); } catch (e) {}
+  try { drawFog(); rebuildFx(); drawFx(t); animWater(t); } catch (e) {}
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -274,8 +309,8 @@ const flavor = p => { const l = FLAVOR[p.k] || ['不思議な気配がする。'
 const pois = new Map();          // id -> {id,e,k,name,lat,lng,marker}
 let poiCenter = null, poiFetching = false, poiFailedAt = 0;
 const poiHtml = (p, found) => found
-  ? `<div class="obj found"><span class="sp">${p.e}</span><div class="base"></div><span class="nm">${esc(p.name)}</span></div>`
-  : `<div class="obj unk"><span class="sp">❓</span><div class="base"></div></div>`;
+  ? `<div class="obj found"><span class="sp">${ART.poi(p.k, 58)}</span><div class="base"></div><span class="nm">${esc(p.name)}</span></div>`
+  : `<div class="obj unk"><span class="sp q">❓</span><div class="base"></div></div>`;
 async function fetchPois(center) {
   poiFetching = true;
   const a = `(around:${POI_RADIUS},${center.lat.toFixed(5)},${center.lng.toFixed(5)})`;
@@ -313,7 +348,7 @@ function checkFound() {
     if (save.found[p.id] || dist(p, me) > FOUND_RANGE) continue;
     save.found[p.id] = { name: p.name, e: p.e, k: p.k, date: todayStr() };
     p.marker.getElement().innerHTML = poiHtml(p, true);
-    celebrate(p.e, `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙 +1🔮'); addGold(20); addShard(1);
+    celebrate(ART.poi(p.k, 104), `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙 +1🔮'); addGold(20); addShard(1);
   }
 }
 const DIRS = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
@@ -357,11 +392,45 @@ function updateLevel() {
   const up = lastLv !== null && lv > lastLv; lastLv = lv;
   if (up) { celebrate('🎖️', `レベルアップ！ ${LEVELS[lv][1]}`); addGold(50); addShard(1); }
 }
+// ---- 時間帯: 光の向きと色、空、太陽と月 ----
+// [時刻, 光の色, 強さ, 方位, 高さ, 空(上)の色rgb+alpha, 夜の度合い]
+const SKY = [
+  [0, '#8ea4ff', 0.28, 200, 70, [22, 20, 76, 0.95], 1], [5, '#8ea4ff', 0.30, 150, 75, [40, 30, 95, 0.93], 0.85],
+  [6.5, '#ffc79a', 0.50, 95, 78, [255, 170, 130, 0.88], 0.25], [9, '#fff0d6', 0.55, 130, 45, [150, 205, 255, 0.85], 0],
+  [12, '#fff4dc', 0.55, 180, 30, [140, 200, 255, 0.85], 0], [15, '#fff0d6', 0.55, 230, 45, [150, 205, 255, 0.85], 0],
+  [17.5, '#ffb27a', 0.50, 265, 78, [255, 140, 110, 0.88], 0.2], [19, '#a98cff', 0.35, 280, 75, [60, 40, 110, 0.93], 0.7],
+  [21, '#8ea4ff', 0.28, 200, 70, [22, 20, 76, 0.95], 1], [24, '#8ea4ff', 0.28, 200, 70, [22, 20, 76, 0.95], 1],
+];
+const hex2 = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mixc = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const rgbs = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+function skyAt(h) {
+  let i = 0; while (i < SKY.length - 2 && h >= SKY[i + 1][0]) i++;
+  const A = SKY[i], B = SKY[i + 1], k = Math.max(0, Math.min(1, (h - A[0]) / (B[0] - A[0])));
+  const L = (x, y) => x + (y - x) * k;
+  return { light: mixc(hex2(A[1]), hex2(B[1]), k), inten: L(A[2], B[2]), az: L(A[3], B[3]), pol: L(A[4], B[4]),
+    haze: A[5].map((v, n) => L(v, B[5][n])), night: L(A[6], B[6]) };
+}
+let lastSkyKey = '';
 function updateTint() {
-  const h = hourNow();
+  const h = hourNow(), s = skyAt(h);
   $('tint').style.background = h < 5 || h >= 20 ? 'rgba(20,30,90,.35)' : h < 7 ? 'rgba(255,170,120,.22)'
     : h < 16 ? 'rgba(255,255,255,0)' : h < 19 ? 'rgba(255,150,70,.22)' : 'rgba(90,50,130,.28)';
+  const hz = s.haze;
+  $('haze').style.background = `linear-gradient(rgba(${hz[0] | 0},${hz[1] | 0},${hz[2] | 0},${hz[3].toFixed(2)}),rgba(${hz[0] | 0},${hz[1] | 0},${hz[2] | 0},0))`;
+  // 太陽と月(昼は太陽が東から西へ、夜は月が昇る)
+  const sun = $('sun'), day = h >= 6 && h < 18, t = day ? (h - 6) / 12 : (((h < 6 ? h + 24 : h) - 18) / 12);
+  sun.className = day ? 'sun' : 'moon'; sun.style.left = (8 + t * 84) + '%'; sun.style.top = (30 - Math.sin(Math.PI * t) * 13) + '%';
+  const key = [s.az | 0, s.pol | 0, (s.night * 20) | 0].join();
+  if (key === lastSkyKey) return; lastSkyKey = key;
+  try {
+    map.setLight({ anchor: 'map', color: rgbs(s.light), intensity: s.inten, position: [1.2, s.az, s.pol] });
+    const dim = [42, 40, 104], f = k => rgbs(mixc(k, dim, s.night * 0.6));
+    map.setPaintProperty('building', 'fill-extrusion-color', ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 8],
+      0, f(hex2('#f7d5b0')), 15, f(hex2('#f1b59d')), 40, f(hex2('#d2a6d8')), 100, f(hex2('#9faae9'))]);
+  } catch (e) {}
 }
+map.on('load', updateTint);
 updateTint(); setInterval(updateTint, 60000);
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.hidden = false;
@@ -389,7 +458,7 @@ function drawTrail() {
 // ---- コイン(歩いて拾う) ----
 const COIN_RANGE = 100, COIN_COUNT = 14, COIN_TTL = 30 * 60e3;
 const coinMarkers = new Map();
-const coinHtml = c => `<div class="coin"><span class="c">${c.k === 'shard' ? '🔮' : c.v >= 10 ? '💎' : c.v >= 3 ? '💰' : '🪙'}</span><i class="sh"></i></div>`;
+const coinHtml = c => `<div class="coin"><span class="c">${ART.coin(c.k === 'shard' ? 'shard' : c.v >= 10 ? 'gem' : c.v >= 3 ? 'bag' : 'coin', 36)}</span><i class="sh"></i></div>`;
 function addCoinMarker(c) { coinMarkers.set(c.id, addPin(c, '', coinHtml(c))); }
 function removeCoinMarker(id) { const m = coinMarkers.get(id); if (m) { m.remove(); coinMarkers.delete(id); } }
 function randomNear(p, minR, maxR) {
@@ -461,13 +530,13 @@ const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1];
 const evoCost = o => ITEM[o.t].cost * (lvOf(o) === 1 ? 2 : 4);
 const accrued = o => Math.min(HARVEST_CAP_H, (Date.now() - o.last) / 3600e3) * rateOf(o);
 const BUILD_RANGE = 40, MAX_BUILT = 300, SHARD_PRICE = 60;
-const SIZE = { flower: 28, tree: 36, rest: 32, lantern: 32, fountain: 38, shrine: 40, house: 42, tower: 48, castle: 52 };
+const SIZE = { flower: 46, tree: 56, rest: 50, lantern: 50, fountain: 58, shrine: 60, house: 62, tower: 68, castle: 72 };   // イラストの大きさ(px)
 const builtMarkers = new Map();
 let placing = null;
 
 const builtHtml = o => {
-  const lv = lvOf(o), sz = (SIZE[o.t] || 36) + (lv - 1) * 4;
-  return `<div class="obj"><span class="sp" style="font-size:${sz}px">${face(o)[0]}</span><div class="base"></div>${lv > 1 ? `<i class="st">${'★'.repeat(lv - 1)}</i>` : ''}</div>`;
+  const lv = lvOf(o), sz = (SIZE[o.t] || 52) + (lv - 1) * 6;
+  return `<div class="obj"><span class="sp">${ART.item(o.t, lv, sz)}</span><div class="base"></div>${lv > 1 ? `<i class="st">${'★'.repeat(lv - 1)}</i>` : ''}</div>`;
 };
 function addBuiltMarker(o, fresh) {
   const m = addPin(o, '', builtHtml(o), () => openObj(o));
@@ -483,9 +552,9 @@ setInterval(refreshBuilt, 60000);
 function openBuildMenu() {
   $('build-gold').textContent = '🪙 ' + save.gold;
   $('build-list').innerHTML = ITEMS.map(i =>
-    `<button data-id="${i.id}" ${save.gold < i.cost ? 'disabled' : ''}><b>${i.chain[0][0]}</b>${i.chain[0][1]}` +
-    `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><small>${i.chain.map(c => c[0]).join('→')}</small></button>`).join('') +
-    `<button id="buy-shard" ${save.gold < SHARD_PRICE ? 'disabled' : ''}><b>🔮</b>進化のかけら<small>${SHARD_PRICE}🪙</small><small>所持 ${save.shards}</small></button>`;
+    `<button data-id="${i.id}" ${save.gold < i.cost ? 'disabled' : ''}><b>${ART.item(i.id, 1, 52)}</b>${i.chain[0][1]}` +
+    `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><span class="mini">${[1, 2, 3].map(l => ART.item(i.id, l, 22)).join('')}</span></button>`).join('') +
+    `<button id="buy-shard" ${save.gold < SHARD_PRICE ? 'disabled' : ''}><b>${ART.coin('shard', 52)}</b>進化のかけら<small>${SHARD_PRICE}🪙</small><small>所持 ${save.shards}</small></button>`;
   $('build-list').querySelectorAll('button[data-id]').forEach(b => b.onclick = () => startPlacing(ITEM[b.dataset.id]));
   $('buy-shard').onclick = () => { if (save.gold < SHARD_PRICE) return; addGold(-SHARD_PRICE); addShard(1); persist(); openBuildMenu(); };
   $('build').hidden = false;
@@ -536,7 +605,7 @@ function evolveCheck(o) {
 function openObj(o) {
   if (placing) return;
   const it = ITEM[o.t], lv = lvOf(o), refund = Math.floor(o.spent / 2);
-  $('obj-title').textContent = `${face(o)[0]} ${face(o)[1]} ${'★'.repeat(lv - 1)}`;
+  $('obj-title').innerHTML = `<span class="ic">${ART.item(o.t, lv, 44)}</span>${esc(face(o)[1])} ${'★'.repeat(lv - 1)}`;
   let html = `<div>${it.role}</div><div>収穫: 1時間に ${rateOf(o).toFixed(1)}🪙 (最大${HARVEST_CAP_H}時間分)<br>たまっているコイン: <b>${Math.floor(accrued(o))}🪙</b>` +
     `<br>つくった日: ${o.d}</div>`;
   if (it.magnet) html += `<div>🧲 近くにコインを呼ぶ力あり</div>`;
@@ -548,7 +617,7 @@ function openObj(o) {
   eb.onclick = () => {
     if (!evolveCheck(o).ok) return;
     const cost = evoCost(o); addGold(-cost); addShard(-EVO_SHARDS[lv]); o.spent += cost; o.lv = lv + 1;
-    refreshBuilt(); celebrate(face(o)[0], `${face(o)[1]}に進化！`); persist(); updateHud(); $('obj').hidden = true;
+    refreshBuilt(); celebrate(ART.item(o.t, o.lv, 104), `${face(o)[1]}に進化！`); persist(); updateHud(); $('obj').hidden = true;
   };
   $('obj-del').textContent = `とりこわす (+${refund}🪙)`;
   $('obj-del').onclick = () => {
@@ -597,7 +666,7 @@ function updatePosition(lat, lng, accuracy) {
   const ll = { lat, lng }; me = ll;
   if (!target) {
     avatar = { lat, lng };
-    meMarker = addPin(ll, '', '<div class="hero"><i class="ring"></i><span class="sp">🧙</span><i class="sh"></i></div>');
+    meMarker = addPin(ll, '', `<div class="hero"><i class="ring"></i><span class="sp">${ART.hero(56)}</span><i class="sh"></i></div>`);
     map.jumpTo({ center: [lng, lat] });
   }
   target = ll;
