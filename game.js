@@ -27,7 +27,7 @@ const isNight = () => { const h = hourNow(); return h < 5 || h >= 19; };
 
 // ---- 保存データ ----
 const KEY = 'sanpo-quest';
-const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [] },
+const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], regions: { pref: {}, city: {} }, titles: {} },
   JSON.parse(localStorage.getItem(KEY) || '{}'));
 save.coins = save.coins.filter(c => c.exp > Date.now());
 if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
@@ -349,16 +349,33 @@ function checkFound() {
     save.found[p.id] = { name: p.name, e: p.e, k: p.k, date: todayStr(), lat: p.lat, lng: p.lng, region: null };
     setTimeout(processRegions, 800);
     p.marker.getElement().innerHTML = poiHtml(p, true);
-    celebrate(ART.poi(p.k, 104), `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙 +1🔮'); addGold(20); addShard(1);
+    setTimeout(checkTitles, 3000); celebrate(ART.poi(p.k, 104), `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙 +1🔮'); addGold(20); addShard(1);
   }
 }
 // ---- 地域の記録(都道府県 → 市区町村 → 町) ----
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// 都道府県の代表地点(日本地図の点の位置) と 地方
+const PREFS = [['北海道', 43.06, 141.35], ['青森県', 40.82, 140.74], ['岩手県', 39.70, 141.15], ['宮城県', 38.27, 140.87], ['秋田県', 39.72, 140.10], ['山形県', 38.24, 140.36],
+  ['福島県', 37.75, 140.47], ['茨城県', 36.34, 140.45], ['栃木県', 36.57, 139.88], ['群馬県', 36.39, 139.06], ['埼玉県', 35.86, 139.65], ['千葉県', 35.61, 140.12],
+  ['東京都', 35.69, 139.69], ['神奈川県', 35.45, 139.64], ['新潟県', 37.90, 139.02], ['富山県', 36.70, 137.21], ['石川県', 36.59, 136.63], ['福井県', 36.07, 136.22],
+  ['山梨県', 35.66, 138.57], ['長野県', 36.65, 138.18], ['岐阜県', 35.39, 136.72], ['静岡県', 34.98, 138.38], ['愛知県', 35.18, 136.91], ['三重県', 34.73, 136.51],
+  ['滋賀県', 35.00, 135.87], ['京都府', 35.02, 135.76], ['大阪府', 34.69, 135.52], ['兵庫県', 34.69, 135.18], ['奈良県', 34.69, 135.83], ['和歌山県', 34.23, 135.17],
+  ['鳥取県', 35.50, 134.24], ['島根県', 35.47, 133.05], ['岡山県', 34.66, 133.93], ['広島県', 34.40, 132.46], ['山口県', 34.19, 131.47], ['徳島県', 34.07, 134.56],
+  ['香川県', 34.34, 134.04], ['愛媛県', 33.84, 132.77], ['高知県', 33.56, 133.53], ['福岡県', 33.61, 130.42], ['佐賀県', 33.25, 130.30], ['長崎県', 32.74, 129.87],
+  ['熊本県', 32.79, 130.74], ['大分県', 33.24, 131.61], ['宮崎県', 31.91, 131.42], ['鹿児島県', 31.56, 130.56], ['沖縄県', 26.21, 127.68]];
+const AREAS = [['hokkaido', '北海道', ['北海道']], ['tohoku', '東北', ['青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県']],
+  ['kanto', '関東', ['茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県']], ['chubu', '中部', ['新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県', '静岡県', '愛知県']],
+  ['kinki', '近畿', ['三重県', '滋賀県', '京都府', '大阪府', '兵庫県', '奈良県', '和歌山県']], ['chugoku', '中国', ['鳥取県', '島根県', '岡山県', '広島県', '山口県']],
+  ['shikoku', '四国', ['徳島県', '香川県', '愛媛県', '高知県']], ['kyushu', '九州・沖縄', ['福岡県', '佐賀県', '長崎県', '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県']]];
+const nPref = () => PREFS.filter(p => save.regions.pref[p[0]]).length, nCity = () => Object.keys(save.regions.city).length, nFound = () => Object.keys(save.found).length;
+
+// 住所の取得(OpenStreetMap Nominatim は1秒に1回まで)
 const regionCache = new Map();
-let regionFailAt = 0;
+let regionFailAt = 0, nomiAt = 0;
 async function lookupRegion(lat, lng) {
   const key = Math.round(lat / 0.004) + ',' + Math.round(lng / 0.004);     // 約400m四方は同じ地域として使い回す
   if (regionCache.has(key)) return regionCache.get(key);
+  const wait = Math.max(0, nomiAt + 1200 - Date.now()); nomiAt = Date.now() + wait; if (wait) await sleep(wait);
   const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&addressdetails=1&accept-language=ja&lat=${lat}&lon=${lng}`);
   if (!res.ok) throw new Error('region ' + res.status);
   const a = (await res.json()).address || {};
@@ -369,31 +386,73 @@ async function lookupRegion(lat, lng) {
   if (!reg.pref && !reg.city) throw new Error('no region');
   regionCache.set(key, reg); return reg;
 }
+const cityKey = r => r.pref + '|' + r.city + (r.ward ? ' ' + r.ward : '');
+// 訪れた地域を記録。初めての都道府県・市区町村ならボーナス
+function registerRegion(reg, bonus) {
+  const today = todayStr(); let newPref = false, newCity = false;
+  if (reg.pref) { const p = save.regions.pref[reg.pref]; if (!p) { save.regions.pref[reg.pref] = { first: today, last: today }; newPref = true; } else p.last = today; }
+  if (reg.city) { const k = cityKey(reg), c = save.regions.city[k]; if (!c) { save.regions.city[k] = { pref: reg.pref, city: reg.city, ward: reg.ward || '', first: today, last: today }; newCity = true; } else c.last = today; }
+  if (bonus && newPref) { celebrate('🗾', `はじめての地方！ ${reg.pref}`); addGold(100); addShard(3); toast(`${reg.pref} に初上陸！\nボーナス +100🪙 +3🔮`); }
+  else if (bonus && newCity) { celebrate('🏙️', `はじめての町！ ${reg.city}${reg.ward ? ' ' + reg.ward : ''}`); addGold(30); addShard(1); toast(`${reg.city}${reg.ward ? ' ' + reg.ward : ''} に初上陸！\nボーナス +30🪙 +1🔮`); }
+  if (newPref || newCity) { persist(); setTimeout(checkTitles, bonus ? 2800 : 0); }
+}
 let regionPromise = null;
-function processRegions() {                  // 地域が未取得の名所を、1件ずつ(間隔をあけて)調べる
+function processRegions() {                  // 地域が未取得の名所を、1件ずつ調べる
   if (regionPromise) return regionPromise;
   regionPromise = (async () => {
     try {
       while (true) {
         const next = Object.entries(save.found).find(([, f]) => !f.region && f.lat != null);
         if (!next || Date.now() - regionFailAt < 60000) break;
-        const [id, f] = next;
-        try { f.region = await lookupRegion(f.lat, f.lng); onNewRegion(id, f); persist(); }
+        const f = next[1];
+        try { f.region = await lookupRegion(f.lat, f.lng); registerRegion(f.region, true); persist(); }
         catch (e) { regionFailAt = Date.now(); break; }
-        await sleep(1200);
       }
     } finally { regionPromise = null; }
   })();
   return regionPromise;
 }
-function onNewRegion(id, f) {                // 初めての都道府県・市区町村ならボーナス
-  const r = f.region, others = Object.entries(save.found).filter(([k, o]) => k !== id && o.region);
-  const prefSeen = !r.pref || others.some(([, o]) => o.region.pref === r.pref);
-  const citySeen = !r.city || others.some(([, o]) => o.region.pref === r.pref && o.region.city === r.city);
-  if (!prefSeen) { celebrate('🗾', `はじめての地方！ ${r.pref}`); addGold(100); addShard(3); toast(`${r.pref} に初上陸！\nボーナス +100🪙 +3🔮`); }
-  else if (!citySeen) { celebrate('🏙️', `はじめての町！ ${r.city}`); addGold(30); addShard(1); toast(`${r.city} に初上陸！\nボーナス +30🪙 +1🔮`); }
+// 歩いているだけでも、通った市区町村を記録する(500m以上動くたびに調べる)
+let regionPos = null, regionTry = 0;
+function maybeRegionVisit() {
+  if (debug || !me) return;
+  const now = Date.now();
+  if ((regionPos && dist(regionPos, me) < 500) || now - regionTry < 30000) return;
+  regionTry = now;
+  const at = { lat: me.lat, lng: me.lng };
+  lookupRegion(at.lat, at.lng).then(reg => { regionPos = at; registerRegion(reg, true); }).catch(() => {});
 }
+// 以前に記録した名所の地域を、新しい記録へ取り込む(ボーナスなし)
+for (const f of Object.values(save.found)) if (f.region) registerRegion(f.region, false);
 setTimeout(processRegions, 4000);
+
+// ---- 称号(達成すると報酬。特別な物が解放される) ----
+const areaDone = a => a[2].every(p => save.regions.pref[p]);
+const TITLES = [
+  { id: 'first', name: 'はじめの一歩', desc: '最初の名所を発見する', ok: () => nFound() >= 1, gold: 20, shards: 0 },
+  { id: 'poi10', name: '名所ハンター 見習い', desc: '名所を10か所発見する', ok: () => nFound() >= 10, gold: 80, shards: 2 },
+  { id: 'poi50', name: '名所ハンター 達人', desc: '名所を50か所発見する', ok: () => nFound() >= 50, gold: 300, shards: 5 },
+  { id: 'poi100', name: '名所ハンター 伝説', desc: '名所を100か所発見する', ok: () => nFound() >= 100, gold: 800, shards: 10 },
+  { id: 'city10', name: '町めぐり 見習い', desc: '10の市区町村を訪れる', ok: () => nCity() >= 10, gold: 60, shards: 1 },
+  { id: 'city30', name: '町めぐり 達人', desc: '30の市区町村を訪れる', ok: () => nCity() >= 30, gold: 200, shards: 3 },
+  { id: 'city100', name: '町めぐり 伝説', desc: '100の市区町村を訪れる', ok: () => nCity() >= 100, gold: 800, shards: 8 },
+  { id: 'pref3', name: '県めぐり ★', desc: '3つの都道府県を訪れる', ok: () => nPref() >= 3, gold: 100, shards: 2, unlock: '🗿 旅の記念碑' },
+  { id: 'pref10', name: '県めぐり ★★', desc: '10の都道府県を訪れる', ok: () => nPref() >= 10, gold: 300, shards: 5 },
+  { id: 'pref20', name: '県めぐり ★★★', desc: '20の都道府県を訪れる', ok: () => nPref() >= 20, gold: 800, shards: 8 },
+  { id: 'pref47', name: '日本一周', desc: '47都道府県をすべて訪れる', ok: () => nPref() >= 47, gold: 3000, shards: 30 },
+  ...AREAS.map(a => ({ id: 'area-' + a[0], name: a[1] + '制覇', desc: a[1] === '北海道' ? '北海道を訪れる' : `${a[1]}の${a[2].length}都道府県をすべて訪れる`, ok: () => areaDone(a), gold: 500, shards: 5, unlock: '🌈 虹のアーチ(最初の地方制覇で解放)', area: a })),
+];
+function checkTitles() {
+  let delay = 0;
+  for (const t of TITLES) {
+    if (save.titles[t.id] || !t.ok()) continue;
+    save.titles[t.id] = todayStr();
+    setTimeout(() => { celebrate('🏅', `称号「${t.name}」`); toast(`称号「${t.name}」を獲得！\n報酬 +${t.gold}🪙${t.shards ? ` +${t.shards}🔮` : ''}${t.unlock ? '\n解放: ' + t.unlock : ''}`); addGold(t.gold); if (t.shards) addShard(t.shards); persist(); }, delay);
+    delay += 3000;
+  }
+  if (delay) persist();
+}
+setTimeout(checkTitles, 5000);
 const DIRS = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
 function bearing(a, b) {
   const y = Math.sin((b.lng - a.lng) * RAD) * Math.cos(b.lat * RAD);
@@ -564,6 +623,8 @@ const ITEMS = [
   { id: 'shrine', cost: 60, rate: 2, lucky: 1, role: 'ご利益で、近くのコインが2倍になることがある', chain: [['⛩️', 'ちいさなほこら'], ['🦊', 'きつねの社'], ['🐉', 'りゅうの社']] },
   { id: 'house', cost: 80, rate: 8, role: '家賃がたまる', chain: [['🏠', 'おうち'], ['🏡', '庭つきの家'], ['🏘️', '小さな村']] },
   { id: 'tower', cost: 150, rate: 3, magnet: 2, role: '遠くからコインを呼び寄せる', chain: [['🗼', 'ひかりの塔'], ['🔭', '星見の塔'], ['🛸', '天空港']] },
+  { id: 'monument', cost: 40, rate: 4, role: '旅の記念。立ち寄るとコインがたまる', locked: () => !save.titles.pref3, lockText: '「県めぐり ★」(3都道府県を訪れる)で解放', chain: [['🗿', '石碑'], ['🗿', '記念碑'], ['🏆', '黄金像']] },
+  { id: 'rainbow', cost: 100, rate: 6, role: '虹の根元にコインがたまる', locked: () => !Object.keys(save.titles).some(k => k.startsWith('area-')), lockText: '最初の「地方制覇」で解放', chain: [['🌈', '小さな虹'], ['🌈', '大きな虹'], ['🌈', '七色のアーチ']] },
   { id: 'castle', cost: 300, rate: 20, role: '税収がたっぷりたまる', chain: [['🏰', 'おしろ'], ['🏯', '大きなおしろ'], ['👑', '王国']] },
 ];
 const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
@@ -573,7 +634,7 @@ const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1];
 const evoCost = o => ITEM[o.t].cost * (lvOf(o) === 1 ? 2 : 4);
 const accrued = o => Math.min(HARVEST_CAP_H, (Date.now() - o.last) / 3600e3) * rateOf(o);
 const BUILD_RANGE = 40, MAX_BUILT = 300, SHARD_PRICE = 60;
-const SIZE = { flower: 46, tree: 56, rest: 50, lantern: 50, fountain: 58, shrine: 60, house: 62, tower: 68, castle: 72 };   // イラストの大きさ(px)
+const SIZE = { monument: 56, rainbow: 66, flower: 46, tree: 56, rest: 50, lantern: 50, fountain: 58, shrine: 60, house: 62, tower: 68, castle: 72 };   // イラストの大きさ(px)
 const builtMarkers = new Map();
 let placing = null;
 
@@ -595,8 +656,8 @@ setInterval(refreshBuilt, 60000);
 function openBuildMenu() {
   $('build-gold').textContent = '🪙 ' + save.gold;
   $('build-list').innerHTML = ITEMS.map(i =>
-    `<button data-id="${i.id}" ${save.gold < i.cost ? 'disabled' : ''}><b>${ART.item(i.id, 1, 52)}</b>${i.chain[0][1]}` +
-    `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><span class="mini">${[1, 2, 3].map(l => ART.item(i.id, l, 22)).join('')}</span></button>`).join('') +
+    `<button data-id="${i.id}" ${(i.locked && i.locked()) || save.gold < i.cost ? 'disabled' : ''}><b>${ART.item(i.id, 1, 52)}</b>${i.chain[0][1]}` +
+    (i.locked && i.locked() ? `<small>🔒 ${i.lockText}</small>` : `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><span class="mini">${[1, 2, 3].map(l => ART.item(i.id, l, 22)).join('')}</span>`) + `</button>`).join('') +
     `<button id="buy-shard" ${save.gold < SHARD_PRICE ? 'disabled' : ''}><b>${ART.coin('shard', 52)}</b>進化のかけら<small>${SHARD_PRICE}🪙</small><small>所持 ${save.shards}</small></button>`;
   $('build-list').querySelectorAll('button[data-id]').forEach(b => b.onclick = () => startPlacing(ITEM[b.dataset.id]));
   $('buy-shard').onclick = () => { if (save.gold < SHARD_PRICE) return; addGold(-SHARD_PRICE); addShard(1); persist(); openBuildMenu(); };
@@ -610,6 +671,7 @@ function circlePoly(c, r) {
 function showPlaceCircle() { setSrc('place', placing && me ? circlePoly(me, BUILD_RANGE) : EMPTY); }
 function startPlacing(it) {
   if (!me) return toast('現在地を取得してからつくれます');
+  if (it.locked && it.locked()) return toast('🔒 ' + it.lockText);
   placing = it; $('build').hidden = true;
   $('place-text').textContent = `${it.chain[0][0]} ${it.chain[0][1]}(${it.cost}🪙)を置く場所をタップ — 円の中だけ置けます`;
   $('placebar').hidden = false; showPlaceCircle();
@@ -696,37 +758,74 @@ $('place-cancel').onclick = stopPlacing;
 $('place-here').onclick = () => placeAt(me);
 let bookTab = 'region', bookFresh = true;
 const bookItem = f => `<li data-lat="${f.lat ?? ''}" data-lng="${f.lng ?? ''}"><span class="ic">${ART.poi(f.k, 30)}</span><div><b>${esc(f.name)}</b><small>${esc(f.k)} ・ ${f.date}</small></div></li>`;
+// 日本地図(都道府県の代表地点に点を置き、訪れた県を金色に塗る)
+function japanMapHtml(items) {
+  const kx = 21, ky = 26, X = lng => (lng - 129.2) * kx + 8, Y = lat => (45.2 - lat) * ky + 6;
+  const OFF = { '東京都': [0, 0], '埼玉県': [-4, -13], '神奈川県': [-9, 12], '千葉県': [17, 9], '茨城県': [13, -13], '栃木県': [3, -21], '群馬県': [-16, -13], '山梨県': [-12, 4], '静岡県': [-4, 6] };   // 関東は点が重ならないようにずらす
+  const pos = p => p[0] === '沖縄県' ? { x: 322, y: 318 } : { x: X(p[2]) + (OFF[p[0]]?.[0] || 0), y: Y(p[1]) + (OFF[p[0]]?.[1] || 0) };
+  const cnt = {}; for (const f of items) if (f.region?.pref) cnt[f.region.pref] = (cnt[f.region.pref] || 0) + 1;
+  const citiesIn = {}; for (const c of Object.values(save.regions.city)) citiesIn[c.pref] = (citiesIn[c.pref] || 0) + 1;
+  let land = '', dots = '';
+  const hokk = [[43.1, 141.4, 22], [43.6, 143.3, 20], [44.3, 142.2, 17], [42.6, 140.4, 15], [42.9, 144.4, 14]];
+  for (const [la, lo, r] of hokk) land += `<circle cx="${X(lo)}" cy="${Y(la)}" r="${r}"/>`;
+  for (const p of PREFS) { const q = pos(p); land += `<circle cx="${q.x}" cy="${q.y}" r="${p[0] === '沖縄県' ? 11 : 19}"/>`; }
+  for (const p of PREFS) {
+    const q = pos(p), seen = !!save.regions.pref[p[0]], n = cnt[p[0]] || 0;
+    dots += `<g class="pd" data-pref="${p[0]}"><circle cx="${q.x}" cy="${q.y}" r="${seen ? 8 : 6}" class="${seen ? 'on' : 'off'}"/>` +
+      (seen ? `<text x="${q.x}" y="${q.y + 3}" text-anchor="middle">${n || '✓'}</text>` : '') + `</g>`;
+  }
+  const done = AREAS.filter(areaDone).map(a => a[1]);
+  return `<div class="jp-note">${nPref()} / 47 都道府県を訪れた${done.length ? ' ・ 制覇: ' + done.join('・') : ''}</div>` +
+    `<svg class="jp" viewBox="0 0 370 390" xmlns="http://www.w3.org/2000/svg"><rect width="370" height="390" rx="14" fill="#cfe8ee"/>` +
+    `<rect x="294" y="292" width="72" height="62" rx="8" fill="none" stroke="#9cc3cc" stroke-dasharray="4 3"/><g fill="#efe6c6">${land}</g>${dots}</svg>` +
+    `<div class="jp-note small">点をタップすると詳しく見られます(数字は発見した名所の数)</div>`;
+}
+function titlesHtml() {
+  return '<ul>' + TITLES.map(t => {
+    const got = save.titles[t.id], prog = t.area ? ` (${t.area[2].filter(p => save.regions.pref[p]).length}/${t.area[2].length})` : '';
+    return `<li class="${got ? 'tdone' : 'tlock'}" style="cursor:default"><span class="ic">${got ? '🏅' : '🔒'}</span><div><b>${esc(t.name)}${got ? '' : prog}</b>` +
+      `<small>${esc(t.desc)} ・ 報酬 🪙${t.gold}${t.shards ? ' 🔮' + t.shards : ''}${t.unlock ? ' ・ 解放: ' + esc(t.unlock) : ''}${got ? ' ・ 獲得 ' + got : ''}</small></div></li>`;
+  }).join('') + '</ul>';
+}
 function renderBook() {
   const openKeys = new Set([...$('book-body').querySelectorAll('details[open]')].map(d => d.dataset.k)), fresh = bookFresh; bookFresh = false;   // 作り直しても開いている項目を保つ
   const items = Object.entries(save.found).map(([id, f]) => ({ id, ...f })).sort((x, y) => y.date.localeCompare(x.date));
-  const prefs = new Set(), cities = new Set();
-  for (const f of items) if (f.region) { if (f.region.pref) prefs.add(f.region.pref); if (f.region.city) cities.add(f.region.pref + '/' + f.region.city); }
-  $('book-sum').innerHTML = `🗾 ${prefs.size}都道府県 ・ 🏙️ ${cities.size}市区町村 ・ ⛩️ ${items.length}名所<br>🏗️ つくったもの ${save.built.length}個 ／ 🪙 ${save.gold} ／ 🔮 ${save.shards}`;
+  $('book-sum').innerHTML = `🗾 ${nPref()}都道府県 ・ 🏙️ ${nCity()}市区町村 ・ ⛩️ ${items.length}名所 ・ 🏅 ${Object.keys(save.titles).length}/${TITLES.length}<br>🏗️ つくったもの ${save.built.length}個 ／ 🪙 ${save.gold} ／ 🔮 ${save.shards}`;
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === bookTab));
   let html = '';
-  if (!items.length) html = '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
-  else if (bookTab === 'recent') html = '<ul>' + items.map(bookItem).join('') + '</ul>';
+  if (bookTab === 'map') html = japanMapHtml(items);
+  else if (bookTab === 'titles') html = titlesHtml();
+  else if (bookTab === 'recent') html = items.length ? '<ul>' + items.map(bookItem).join('') + '</ul>' : '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
   else {
+    if (!items.length && !nCity()) html = '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
     const tree = new Map();       // 都道府県 -> 市区町村 -> 町 -> [名所]
-    for (const f of items) {
-      const r = f.region, p = r?.pref || (f.lat != null ? '（地域を取得中…）' : '（地域の記録なし）');
-      const c = r?.city ? r.city + (r.ward ? ' ' + r.ward : '') : '—', t = r?.town || '—';
+    const node = (p, c, t) => {
       if (!tree.has(p)) tree.set(p, new Map()); const cm = tree.get(p);
       if (!cm.has(c)) cm.set(c, new Map()); const tm = cm.get(c);
-      if (!tm.has(t)) tm.set(t, []); tm.get(t).push(f);
+      if (!tm.has(t)) tm.set(t, []); return tm.get(t);
+    };
+    for (const c of Object.values(save.regions.city)) node(c.pref || '（地域不明）', c.city + (c.ward ? ' ' + c.ward : ''), '—');   // 歩いただけの町も載せる
+    for (const f of items) {
+      const r = f.region, p = r?.pref || (f.lat != null ? '（地域を取得中…）' : '（地域の記録なし）');
+      node(p, r?.city ? r.city + (r.ward ? ' ' + r.ward : '') : '—', r?.town || '—').push(f);
     }
     const cnt = m => [...m.values()].reduce((s, v) => s + (Array.isArray(v) ? v.length : cnt(v)), 0);
-    html = [...tree.entries()].sort((x, y) => cnt(y[1]) - cnt(x[1])).map(([p, cm], pi) =>
+    const badge = n => n ? n : '<em>歩いた</em>';
+    html += [...tree.entries()].sort((x, y) => cnt(y[1]) - cnt(x[1])).map(([p, cm], pi) =>
       `<details data-k="${esc(p)}" ${(fresh ? pi === 0 : openKeys.has(p)) ? 'open' : ''}><summary>${esc(p)}<b>${cnt(cm)}</b></summary>` +
       [...cm.entries()].sort((x, y) => cnt(y[1]) - cnt(x[1])).map(([c, tm]) =>
-        `<details data-k="${esc(p + '|' + c)}" ${(fresh ? pi === 0 : openKeys.has(p + '|' + c)) ? 'open' : ''}><summary>${esc(c)}<b>${cnt(tm)}</b></summary>` +
-        [...tm.entries()].map(([t, fs]) => t === '—' ? `<ul>${fs.map(bookItem).join('')}</ul>`
+        `<details data-k="${esc(p + '|' + c)}" ${(fresh ? pi === 0 : openKeys.has(p + '|' + c)) ? 'open' : ''}><summary>${esc(c)}<b>${badge(cnt(tm))}</b></summary>` +
+        [...tm.entries()].map(([t, fs]) => t === '—' ? (fs.length ? `<ul>${fs.map(bookItem).join('')}</ul>` : '')
           : `<details data-k="${esc(p + '|' + c + '|' + t)}" ${openKeys.has(p + '|' + c + '|' + t) ? 'open' : ''}><summary>${esc(t)}<b>${fs.length}</b></summary><ul>${fs.map(bookItem).join('')}</ul></details>`).join('') + '</details>').join('') + '</details>').join('');
   }
   $('book-body').innerHTML = html;
   $('book-body').querySelectorAll('li[data-lat]').forEach(li => li.onclick = () => {      // タップでその場所へ
     const lat = parseFloat(li.dataset.lat), lng = parseFloat(li.dataset.lng); if (isNaN(lat)) return;
     $('book').hidden = true; follow = false; map.flyTo({ center: [lng, lat], zoom: 17, pitch: CAM.pitch, duration: 1600 });
+  });
+  $('book-body').querySelectorAll('.pd').forEach(el => el.onclick = () => {                // 日本地図の点
+    const p = el.dataset.pref, reg = save.regions.pref[p], cities = Object.values(save.regions.city).filter(c => c.pref === p).length, found = items.filter(f => f.region?.pref === p).length;
+    toast(reg ? `${p}\n訪れた市区町村 ${cities} ／ 名所 ${found}\n初めて訪れた日 ${reg.first}` : `${p}\nまだ訪れていません`);
   });
 }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { bookTab = b.dataset.tab; renderBook(); });
@@ -758,7 +857,7 @@ function updatePosition(lat, lng, accuracy) {
       last = { p: ll, t: now };
     }
   }
-  revealAround(ll); maintainCoins(); pickCoins(accuracy); visitBuilt(); maybeFetchPois(); checkFound(); updateHint(); persistSoon(); updateHud();
+  revealAround(ll); maintainCoins(); pickCoins(accuracy); visitBuilt(); maybeFetchPois(); checkFound(); maybeRegionVisit(); updateHint(); persistSoon(); updateHud();
   if (placing) showPlaceCircle();
   $('status').textContent = debug ? 'テスト移動中(地図タップで移動)' : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`;
 }

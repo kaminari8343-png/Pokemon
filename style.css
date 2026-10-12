@@ -123,3 +123,13 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 #book-body li div{flex:1;min-width:0}
 #book-body li small{display:block;opacity:.65;font-size:11px}
 #book-body .empty{padding:10px;opacity:.7;font-size:13px}
+
+.tabs button{font-size:12px;padding:7px 2px}
+#book-body summary b em{font-style:normal;font-weight:500;color:#6a8a4a;font-size:11px}
+svg.jp{width:100%;max-height:44vh;display:block}
+svg.jp .pd{cursor:pointer}
+svg.jp circle.off{fill:#d4c79f}
+svg.jp circle.on{fill:#ffd24a;stroke:#8a5a00;stroke-width:1.5}
+svg.jp text{font-size:9px;font-weight:700;fill:#5b3a00;pointer-events:none}
+.jp-note{font-size:13px;margin:0 0 6px}.jp-note.small{font-size:11px;opacity:.65;margin:6px 0 0}
+#book-body li.tlock{opacity:.55}
