@@ -3,6 +3,7 @@
 window.ART = (function () {
   const O = '#4a3424';
   const S = `stroke="${O}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"`;
+  const SW = w => `stroke="${O}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
   const rect = (x, y, w, h, f, r = 2) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${f}" ${S}/>`;
   const circ = (x, y, r, f, st = true) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}" ${st ? S : ''}/>`;
   const ell = (x, y, rx, ry, f, st = true) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${f}" ${st ? S : ''}/>`;
@@ -126,14 +127,14 @@ window.ART = (function () {
     path('M18 58 L22 34 Q32 30 42 34 L46 58 Z', '#6a4ab8') + path('M24 40 L40 40 L41 46 L23 46 Z', '#8a6ad8') +
     circ(32, 28, 9, '#ffd9b8') + path('M24 31 Q32 46 40 31 Q36 36 32 36 Q28 36 24 31Z', '#f4f4f4') + circ(28.5, 27, 1.4, O, false) + circ(35.5, 27, 1.4, O, false) +
     ell(32, 20, 17, 5, '#5a3aa8') + poly('19,20 32,-2 45,20', '#6a4ab8') + `<polygon points="${starPts(34, 10, 4.5, 1.8)}" fill="#ffe066" stroke="none"/>`;
-  const BUTTERFLY = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><path d="M16 16 Q4 2 3 12 Q3 20 16 17Z" fill="#ff9a3d" ${S} stroke-width="1.4"/><path d="M16 16 Q28 2 29 12 Q29 20 16 17Z" fill="#ff9a3d" ${S} stroke-width="1.4"/><path d="M16 17 Q6 20 8 27 Q14 28 16 18Z" fill="#ffd24a" ${S} stroke-width="1.4"/><path d="M16 17 Q26 20 24 27 Q18 28 16 18Z" fill="#ffd24a" ${S} stroke-width="1.4"/><rect x="15" y="9" width="2" height="14" rx="1" fill="${O}"/></svg>`;
+  const BUTTERFLY = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><path d="M16 16 Q4 2 3 12 Q3 20 16 17Z" fill="#ff9a3d" ${SW(1.4)}/><path d="M16 16 Q28 2 29 12 Q29 20 16 17Z" fill="#ff9a3d" ${SW(1.4)}/><path d="M16 17 Q6 20 8 27 Q14 28 16 18Z" fill="#ffd24a" ${SW(1.4)}/><path d="M16 17 Q26 20 24 27 Q18 28 16 18Z" fill="#ffd24a" ${SW(1.4)}/><rect x="15" y="9" width="2" height="14" rx="1" fill="${O}"/></svg>`;
   // ---- 地面の飾り(キャンバス用) ----
   const DECOR = [
     () => bloom(32, 32, 8, '#ff9ec7', '#ffd24a') + line(32, 40, 32, 58, '#4a8a3a', 3),
     () => bloom(32, 32, 8, '#ffe05a', '#e2862a', 8) + line(32, 40, 32, 58, '#4a8a3a', 3),
     () => rect(28, 36, 8, 20, '#fff1d6') + path('M10 38 Q32 4 54 38 Z', '#e2574c') + circ(24, 30, 3, '#fff', false) + circ(38, 24, 3.4, '#fff', false) + circ(46, 33, 2.4, '#fff', false),
     () => circ(24, 40, 9, '#6fbf5a') + circ(40, 40, 9, '#6fbf5a') + circ(32, 28, 9, '#7fcf6a') + line(32, 38, 32, 58, '#4a8a3a', 3),
-    () => `<path d="M12 58 Q16 34 20 22 Q22 40 26 58Z M26 58 Q30 28 34 14 Q38 38 40 58Z M40 58 Q46 36 52 26 Q52 44 54 58Z" fill="#7fcf6a" ${S} stroke-width="1.6"/>`,
+    () => `<path d="M12 58 Q16 34 20 22 Q22 40 26 58Z M26 58 Q30 28 34 14 Q38 38 40 58Z M40 58 Q46 36 52 26 Q52 44 54 58Z" fill="#7fcf6a" ${SW(1.6)}/>`,
   ];
 
   const mini = (inner, px) => svg(inner, px);
