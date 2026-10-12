@@ -199,3 +199,12 @@ svg.jp text{font-size:8px}
 
 .lite #fx{display:none}.lite .pin *,.lite .pin{animation:none!important}.lite .pin .c,.lite .pin .sp,.lite .ghost .sp{filter:none!important}.lite .obj.found .base::before{display:none}
 #btns button.spin{animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}
+#bview{display:flex;gap:6px;align-items:center;font-size:12px;margin-bottom:8px}#bview button{width:auto!important;flex:1;padding:6px 4px!important;background:#e6d9b8!important;color:#3a2a10!important;font-size:12px}#bview button.on{background:#5b4326!important;color:#fff!important}
+.clu{position:relative;width:60px;height:60px;display:flex;align-items:center;justify-content:center}.clu .sp{position:relative;z-index:1;line-height:0;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+.clu::before{content:"";position:absolute;inset:2px;border-radius:50%;background:radial-gradient(circle,rgba(255,248,225,.95),rgba(255,216,115,.55) 70%,transparent);box-shadow:0 0 0 2px rgba(91,67,38,.55)}
+.clu .n{position:absolute;right:-4px;bottom:0;z-index:2;font:800 12px/1 sans-serif;font-style:normal;background:#5b4326;color:#fff;border-radius:10px;padding:3px 6px}
+.clu .rd{position:absolute;left:-2px;top:-4px;z-index:2;font-size:16px;font-style:normal}
+.clist{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}.clist button{display:flex!important;flex-direction:column;align-items:center;gap:1px;background:#fff8e1!important;color:#3a2a10!important;border:2px solid #d9c9a0!important;font-size:12px!important;padding:6px 2px!important}.clist b{line-height:0}.clist small{opacity:.7}
+.lk{display:inline-block;line-height:0;opacity:.35;margin-right:2px;vertical-align:middle}.lk.on{opacity:1;filter:drop-shadow(0 0 3px #ffd873)}
+#build-list button .likes{display:flex;gap:2px;justify-content:center;align-items:center;line-height:0;opacity:.9}
+.lite .clu::before{box-shadow:none}

@@ -683,6 +683,13 @@ const TITLES = [
   { id: 'build10', name: 'つくり手 見習い', desc: '物を10回つくる', ok: () => (save.stats.builds || 0) >= 10, gold: 100, shards: 1 },
   { id: 'build50', name: 'つくり手 達人', desc: '物を50回つくる', ok: () => (save.stats.builds || 0) >= 50, gold: 300, shards: 3 },
   { id: 'build100', name: 'つくり手 伝説', desc: '物を100回つくる', ok: () => (save.stats.builds || 0) >= 100, gold: 800, shards: 8 },
+  { id: 'town5', name: '街づくり 見習い', desc: '建物を同時に5つ置く', ok: () => save.built.length >= 5, gold: 60, shards: 1 },
+  { id: 'town30', name: '街づくり 達人', desc: '建物を同時に30個置く', ok: () => save.built.length >= 30, gold: 300, shards: 3 },
+  { id: 'town100', name: '街づくり 伝説', desc: '建物を同時に100個置く', ok: () => save.built.length >= 100, gold: 900, shards: 8 },
+  { id: 'syn3', name: '相性ばつぐん', desc: '3種類の好きな相手に囲まれた建物をつくる', ok: () => [...synCache.values()].some(v => v.n >= 3), gold: 150, shards: 2 },
+  { id: 'syn4', name: '理想の街並み', desc: '4種類の好きな相手に囲まれた建物をつくる(最大ボーナス)', ok: () => [...synCache.values()].some(v => v.n >= 4), gold: 400, shards: 4 },
+  { id: 'allfam', name: '建築図鑑コンプリート', desc: 'すべての種類の建物を、1つずつ置く', ok: () => ITEMS.every(i => save.built.some(o => o.t === i.id)), gold: 1000, shards: 10 },
+  { id: 'star5', name: '名建築のオーナー', desc: '最高の姿(★★)の建物を5つ持つ', ok: () => save.built.filter(o => lvOf(o) >= 3).length >= 5, gold: 500, shards: 5 },
   { id: 'evo5', name: '進化の使い手', desc: '物を5回進化させる', ok: () => (save.stats.evos || 0) >= 5, gold: 150, shards: 2 },
   { id: 'evo20', name: '進化の名人', desc: '物を20回進化させる', ok: () => (save.stats.evos || 0) >= 20, gold: 500, shards: 5 },
   { id: 'evo50', name: '進化の賢者', desc: '物を50回進化させる', ok: () => (save.stats.evos || 0) >= 50, gold: 1500, shards: 15 },
@@ -919,17 +926,40 @@ const ITEMS = [
   { id: 'windmill', cost: 130, rate: 6, minLv: 7, role: '風を受けて、コインを回す', chain: [['🌬️', '風車'], ['🌬️', '大きな風車'], ['🌷', '風車の丘']] },
   { id: 'lighthouse', cost: 220, rate: 5, magnet: 2, minLv: 10, role: '遠くのコインを、光で呼び寄せる', chain: [['🗼', '灯台'], ['🗼', '高い灯台'], ['🌟', '大灯台']] },
   { id: 'funfair', cost: 420, rate: 28, minLv: 14, role: 'にぎわいが、たくさんのコインを生む', chain: [['🎠', 'メリーゴーランド'], ['🎡', '観覧車'], ['🎪', '遊園地']] },
+  { id: 'market', cost: 60, rate: 5, minLv: 4, role: '品物がならんで、コインが入る', chain: [['🧺', '屋台'], ['🏪', 'お店'], ['🏬', 'デパート']] },
+  { id: 'onsen', cost: 110, rate: 7, minLv: 6, role: '湯けむりに、ひとが集まる', chain: [['♨️', '湯けむり'], ['🛁', '露天風呂'], ['🏨', '温泉旅館']] },
+  { id: 'library', cost: 120, rate: 6, minLv: 8, role: '本がふえるほど、にぎわう', chain: [['📚', '本だな'], ['📖', '図書館'], ['🏛️', '大図書館']] },
+  { id: 'harbor', cost: 160, rate: 9, minLv: 9, role: '船が荷物と、コインを運ぶ', chain: [['⛵', '小舟'], ['⚓', '船着き場'], ['🚢', '大きな港']] },
+  { id: 'observatory', cost: 240, rate: 8, minLv: 12, role: '星を見に、ひとが集まる', chain: [['🔭', '望遠鏡'], ['🌌', '天文台'], ['🚀', '宇宙センター']] },
   { id: 'castle', cost: 300, rate: 20, role: '税収がたっぷりたまる', chain: [['🏰', 'おしろ'], ['🏯', '大きなおしろ'], ['👑', '王国']] },
 ];
 ITEMS.forEach(i => { if (i.minLv && !i.locked) { i.locked = () => curLevel() < i.minLv; i.lockText = `Lv.${i.minLv} で解放`; } });
 const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+const ITEM_ORDER = ITEMS.map(i => i.id);
+// 相性: 近く(70m以内)に「好きな相手」がいると、収穫が増える(種類ごとに+15%、最大+60%)
+const LIKES = { flower: ['tree', 'fountain', 'house'], tree: ['flower', 'rest', 'ranch'], rest: ['tree', 'fountain', 'lantern', 'market'], lantern: ['shrine', 'rest', 'house', 'market'],
+  fountain: ['flower', 'rest', 'castle', 'library'], shrine: ['lantern', 'tree', 'monument', 'onsen'], house: ['flower', 'farm', 'market', 'lantern'], tower: ['castle', 'observatory', 'lighthouse', 'funfair'],
+  monument: ['shrine', 'tower', 'library', 'rainbow'], rainbow: ['fountain', 'flower', 'windmill'], farm: ['ranch', 'windmill', 'house', 'market'], ranch: ['farm', 'tree', 'windmill'],
+  windmill: ['farm', 'ranch', 'rainbow'], lighthouse: ['harbor', 'tower', 'market'], funfair: ['market', 'tower', 'castle'], castle: ['tower', 'fountain', 'library', 'funfair'],
+  market: ['house', 'funfair', 'harbor', 'farm'], onsen: ['shrine', 'tree', 'rest', 'house'], library: ['fountain', 'monument', 'castle', 'observatory'], harbor: ['lighthouse', 'market', 'house'], observatory: ['tower', 'library', 'lantern'] };
+const SYN_RANGE = 70, SYN_STEP = 0.15, SYN_MAX = 4;
+const synCache = new Map();
+function recalcSyn() {
+  synCache.clear();
+  for (const o of save.built) {
+    const likes = LIKES[o.t] || [], got = new Set();
+    for (const q of save.built) if (q !== o && likes.includes(q.t) && dist(o, q) <= SYN_RANGE) got.add(q.t);
+    synCache.set(o.id, { n: Math.min(SYN_MAX, got.size), types: [...got] });
+  }
+}
+const synMul = o => 1 + SYN_STEP * ((synCache.get(o.id) || { n: 0 }).n);
 const lvOf = o => o.lv || 1;
 const face = o => ITEM[o.t].chain[lvOf(o) - 1];                 // [絵文字, 名前]
-const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1];
+const rateOf = o => ITEM[o.t].rate * LV_RATE[lvOf(o) - 1] * synMul(o);
 const evoCost = o => ITEM[o.t].cost * (lvOf(o) === 1 ? 2 : 4);
 const accrued = o => Math.min(HARVEST_CAP_H, (Date.now() - o.last) / 3600e3) * rateOf(o);
 const BUILD_RANGE = 40, MAX_BUILT = 300, SHARD_PRICE = 60;
-const SIZE = { farm: 54, ranch: 60, windmill: 62, lighthouse: 70, funfair: 72, monument: 56, rainbow: 66, flower: 46, tree: 56, rest: 50, lantern: 50, fountain: 58, shrine: 60, house: 62, tower: 68, castle: 72 };   // イラストの大きさ(px)
+const SIZE = { market: 56, onsen: 58, library: 60, harbor: 64, observatory: 62, farm: 54, ranch: 60, windmill: 62, lighthouse: 70, funfair: 72, monument: 56, rainbow: 66, flower: 46, tree: 56, rest: 50, lantern: 50, fountain: 58, shrine: 60, house: 62, tower: 68, castle: 72 };   // イラストの大きさ(px)
 const builtMarkers = new Map();
 let placing = null;
 
@@ -945,14 +975,55 @@ function addBuiltMarker(o, fresh) {
 }
 function refreshBuilt() {
   for (const o of save.built) { const m = builtMarkers.get(o.id); if (!m) continue; const el = m.getElement(); el.innerHTML = builtHtml(o); el.classList.toggle('ready', accrued(o) >= 8); }
+  reclusterBuilt();
 }
+// 建物が増えて見にくいとき: 近い建物を「まとめバッジ」にする(地図を拡大するとほどける)。表示は「まとめる / すべて / かくす」から選べる
+const CLUSTER_PX = 58;
+let clusterMarkers = [];
+const worldXY = (o, z) => { const sc = 512 * Math.pow(2, z); return [(o.lng + 180) / 360 * sc, (0.5 - Math.log(Math.tan(Math.PI / 4 + o.lat * RAD / 2)) / (2 * Math.PI)) * sc]; };
+function reclusterBuilt() {
+  clusterMarkers.forEach(m => m.remove()); clusterMarkers = [];
+  const mode = save.bview || 'auto', z = map.getZoom(), groups = [];
+  for (const o of save.built) {
+    const m = builtMarkers.get(o.id); if (!m) continue;
+    if (mode === 'hide') { m.getElement().style.display = 'none'; continue; }
+    if (mode === 'all') { m.getElement().style.display = ''; continue; }
+    const [x, y] = worldXY(o, z);
+    let gr = null, bd = CLUSTER_PX * 0.8;                       // 近い建物は、同じグループへ(地図を動かしても、まとまり方は変わらない)
+    for (const q of groups) { const d = Math.hypot(q.x - x, q.y - y); if (d < bd) { bd = d; gr = q; } }
+    if (gr) { gr.list.push(o); gr.x += (x - gr.x) / gr.list.length; gr.y += (y - gr.y) / gr.list.length; } else groups.push({ x, y, list: [o] });
+  }
+  for (const { list } of groups) {
+    if (list.length === 1) { builtMarkers.get(list[0].id).getElement().style.display = ''; continue; }
+    list.forEach(o => { builtMarkers.get(o.id).getElement().style.display = 'none'; });
+    const c = { lat: list.reduce((s, o) => s + o.lat, 0) / list.length, lng: list.reduce((s, o) => s + o.lng, 0) / list.length };
+    const best = list.reduce((a, b) => (lvOf(b) > lvOf(a) || (lvOf(b) === lvOf(a) && ITEM[b.t].cost > ITEM[a.t].cost)) ? b : a);
+    const ready = list.some(o => accrued(o) >= 8);
+    clusterMarkers.push(addPin(c, 'clump', `<div class="clu"><span class="sp">${ART.item(best.t, lvOf(best), 46)}</span><i class="n">×${list.length}</i>${ready ? '<i class="rd">🪙</i>' : ''}<div class="base"></div></div>`, () => openCluster(list)));
+  }
+}
+function openCluster(list) {
+  if (map.getZoom() < 18.2) {
+    const b = new maplibregl.LngLatBounds(); list.forEach(o => b.extend([o.lng, o.lat]));
+    follow = false; map.fitBounds(b, { padding: 110, maxZoom: 19.2, duration: 600 }); return;
+  }
+  const rate = list.reduce((s, o) => s + rateOf(o), 0);
+  $('obj-title').innerHTML = `<span class="ic">🏘️</span>まとまっている建物 (${list.length})`;
+  $('obj-sub').innerHTML = `<div>合計 1時間に ${rate.toFixed(1)}🪙</div><div class="clist">${list.map(o => `<button data-b="${o.id}"><b>${ART.item(o.t, lvOf(o), 30)}</b>${esc(face(o)[1])} ${'★'.repeat(lvOf(o) - 1)}<small>${Math.floor(accrued(o))}🪙</small></button>`).join('')}</div>`;
+  $('obj-evo').hidden = true; $('obj-del').hidden = true;
+  $('obj-sub').querySelectorAll('button[data-b]').forEach(b => b.onclick = () => openObj(save.built.find(o => o.id === b.dataset.b)));
+  $('obj').hidden = false;
+}
+map.on('zoomend', reclusterBuilt);
 setInterval(refreshBuilt, 60000);
 
 function openBuildMenu() {
-  $('build-gold').textContent = '🪙 ' + save.gold;
+  $('build-gold').textContent = '🪙 ' + save.gold + ' ・ ' + save.built.length + '/' + MAX_BUILT;
+  $('bview').innerHTML = '表示: ' + [['auto', '🏘️ まとめる'], ['all', '👁️ すべて'], ['hide', '🙈 かくす']].map(([v, l]) => `<button data-v="${v}" class="${(save.bview || 'auto') === v ? 'on' : ''}">${l}</button>`).join('');
+  $('bview').querySelectorAll('button').forEach(b => b.onclick = () => { save.bview = b.dataset.v; persist(); reclusterBuilt(); openBuildMenu(); });
   $('build-list').innerHTML = ITEMS.map(i =>
     `<button data-id="${i.id}" ${(i.locked && i.locked()) || save.gold < i.cost ? 'disabled' : ''}><b>${ART.item(i.id, 1, 52)}</b>${i.chain[0][1]}` +
-    (i.locked && i.locked() ? `<small>🔒 ${i.lockText}</small>` : `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><span class="mini">${[1, 2, 3].map(l => ART.item(i.id, l, 22)).join('')}</span>`) + `</button>`).join('') +
+    (i.locked && i.locked() ? `<small>🔒 ${i.lockText}</small>` : `<small>${i.cost}🪙 ・ ${i.rate}🪙/時</small><span class="mini">${[1, 2, 3].map(l => ART.item(i.id, l, 22)).join('')}</span><small class="likes">😊 ${(LIKES[i.id] || []).map(t => ART.item(t, 1, 16)).join('')}</small>`) + `</button>`).join('') +
     `<button id="buy-shard" ${save.gold < SHARD_PRICE ? 'disabled' : ''}><b>${ART.coin('shard', 52)}</b>進化のかけら<small>${SHARD_PRICE}🪙</small><small>所持 ${save.shards}</small></button>`;
   $('build-list').querySelectorAll('button[data-id]').forEach(b => b.onclick = () => startPlacing(ITEM[b.dataset.id]));
   $('buy-shard').onclick = () => { if (save.gold < SHARD_PRICE) return; addGold(-SHARD_PRICE); addShard(1); persist(); openBuildMenu(); };
@@ -980,7 +1051,7 @@ function placeAt(ll) {
   const it = placing;
   const o = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), t: it.id, lat: ll.lat, lng: ll.lng, d: todayStr(),
     lv: 1, last: Date.now(), days: 1, lastDay: todayStr(), spent: it.cost };
-  save.built.push(o); addBuiltMarker(o, true); addGold(-it.cost);
+  save.built.push(o); addBuiltMarker(o, true); recalcSyn(); reclusterBuilt(); addGold(-it.cost);
   save.stats.builds = (save.stats.builds || 0) + 1; D().built++; addXp(it.cost / 2); checkDaily();
   toast(`${face(o)[0]} ${face(o)[1]}をつくった！\n歩いて通うと育って、進化します`); stopPlacing(); persist(); updateHud();
 }
@@ -1010,12 +1081,14 @@ function openObj(o) {
   $('obj-title').innerHTML = `<span class="ic">${ART.item(o.t, lv, 44)}</span>${esc(face(o)[1])} ${'★'.repeat(lv - 1)}`;
   let html = `<div>${it.role}</div><div>収穫: 1時間に ${rateOf(o).toFixed(1)}🪙 (最大${HARVEST_CAP_H}時間分)<br>たまっているコイン: <b>${Math.floor(accrued(o))}🪙</b>` +
     `<br>つくった日: ${o.d}</div>`;
+  const sy = synCache.get(o.id) || { n: 0, types: [] }, likes = LIKES[o.t] || [];
+  html += `<div>😊 相性(70m以内): ${sy.n ? `<b>+${Math.round(sy.n * SYN_STEP * 100)}%</b> ` + sy.types.map(t => ITEM[t].chain[0][1]).join('・') : 'なし'}<br><small>好きな相手: ${likes.map(t => `<span class="lk ${sy.types.includes(t) ? 'on' : ''}">${ART.item(t, 1, 20)}</span>`).join('')} 種類ごとに+${Math.round(SYN_STEP * 100)}%(最大+${Math.round(SYN_STEP * SYN_MAX * 100)}%)</small></div>`;
   if (it.magnet) html += `<div>🧲 近くにコインを呼ぶ力あり</div>`;
   if (it.lucky) html += `<div>🍀 近くのコインが2倍になることがある</div>`;
   if (lv < 3) html += `<div>進化先: ${it.chain[lv][0]} ${it.chain[lv][1]}<br>必要: 🔮×${EVO_SHARDS[lv]} ＋ 🪙${evoCost(o)}</div>`;
   $('obj-sub').innerHTML = html;
   const ev = evolveCheck(o), eb = $('obj-evo');
-  eb.hidden = lv >= 3; eb.disabled = !ev.ok; eb.textContent = ev.ok ? `進化させる (🔮×${EVO_SHARDS[lv]} ＋ ${evoCost(o)}🪙)` : ev.why;
+  $('obj-del').hidden = false; eb.hidden = lv >= 3; eb.disabled = !ev.ok; eb.textContent = ev.ok ? `進化させる (🔮×${EVO_SHARDS[lv]} ＋ ${evoCost(o)}🪙)` : ev.why;
   eb.onclick = () => {
     if (!evolveCheck(o).ok) return;
     const cost = evoCost(o); addGold(-cost); addShard(-EVO_SHARDS[lv]); o.spent += cost; o.lv = lv + 1;
@@ -1025,7 +1098,7 @@ function openObj(o) {
   $('obj-del').textContent = `とりこわす (+${refund}🪙)`;
   $('obj-del').onclick = () => {
     const m = builtMarkers.get(o.id); if (m) m.remove(); builtMarkers.delete(o.id);
-    save.built.splice(save.built.indexOf(o), 1); addGold(refund); persist(); updateHud(); $('obj').hidden = true;
+    save.built.splice(save.built.indexOf(o), 1); recalcSyn(); reclusterBuilt(); addGold(refund); persist(); updateHud(); $('obj').hidden = true;
   };
   $('obj').hidden = false;
 }
@@ -1621,7 +1694,9 @@ else {
   setTimeout(() => startPreview('位置情報の取得に時間がかかっています'), 8000);
 }
 save.coins.forEach(addCoinMarker);
+recalcSyn();
 save.built.forEach(o => addBuiltMarker(o, false));
+reclusterBuilt(); map.once('load', reclusterBuilt);
 
 // ---- ワープゲート: 行ったことのある場所(霧が晴れた場所)に置くと、冒険モードでいつでもそこへ飛べる ----
 const GATE_COST = 30, MAX_GATES = 12;
@@ -1665,6 +1740,7 @@ function openGate(gt) {
   if (placing || placingGate) return;
   $('obj-title').innerHTML = `<span class="ic">🌀</span>${esc(gt.name)}`;
   $('obj-sub').innerHTML = `<div>行ったことのある場所へ、一瞬で飛べるゲート。冒険モードでは、どこからでも使えます。</div><div>設置: ${gt.d}</div>`;
+  $('obj-del').hidden = false;
   const eb = $('obj-evo'); eb.hidden = false; eb.disabled = false; eb.textContent = '🌀 ここへワープする';
   eb.onclick = () => { $('obj').hidden = true; warpTo(gt); };
   $('obj-del').textContent = 'ゲートを撤去する (返金なし)';
