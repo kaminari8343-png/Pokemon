@@ -186,3 +186,11 @@ svg.jp text{font-size:8px}
 #lvl-name,#lvl small{white-space:nowrap}
 #hint{top:142px}
 #toast{top:182px}
+
+.gate{position:relative;width:58px;text-align:center;animation:bob 1.6s ease-in-out infinite alternate}
+.gate .gv{animation:gvp 1.8s ease-in-out infinite alternate;transform-origin:32px 38px}.gate .gs{animation:gsp 3s linear infinite;transform-origin:32px 38px}
+.gate .gn{position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:-2px;white-space:nowrap;font:700 11px/1.2 sans-serif;font-style:normal;color:#fff;background:rgba(60,40,120,.8);padding:1px 6px;border-radius:8px;max-width:110px;overflow:hidden;text-overflow:ellipsis}
+@keyframes gvp{to{transform:scale(1.08);opacity:.85}}@keyframes gsp{to{transform:rotate(360deg)}}
+.warpflash{position:fixed;inset:0;z-index:3000;pointer-events:none;background:radial-gradient(circle,#fff,#9be7ff 40%,#6a4bd8);animation:wf .9s ease-out forwards}
+@keyframes wf{0%{opacity:.95}100%{opacity:0}}
+.gates{list-style:none;padding:0;margin:0 0 8px}.gates li{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}.gates li b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gates li button{width:auto!important;padding:6px 12px!important}

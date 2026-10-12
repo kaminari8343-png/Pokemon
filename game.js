@@ -409,7 +409,7 @@ async function fetchPois(center) {
     poiCenter = center; poiLoadedAt = Date.now(); poiFailCount = 0; poiMsg = null;
   } catch (e) {
     poiFailCount++; poiRetryAt = Date.now() + Math.min(60, 6 * 2 ** poiFailCount) * 1000;          // 失敗したら、少しずつ間をあけて自動でやり直す
-    if (!pois.size) poiMsg = '⚠️ 名所を読み込めません(通信が混み合っています)。自動でやり直します…';
+    if (!pois.size) poiMsg = '⚠️ 名所を読み込めません。自動でやり直します…';
   }
   poiFetching = false; updateHint();
 }
@@ -1331,6 +1331,9 @@ function renderAdvPanel() {
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
   $('adv-toggle').textContent = mode === 'adventure' ? '現実モードにもどる(GPSで歩く)' : '冒険モードにする';
   $('awake').checked = !!save.awake; $('awake-st').textContent = !('wakeLock' in navigator) ? '(このブラウザは未対応)' : wakeLock ? '(今: 有効)' : save.awake ? '(画面を触ると有効になります)' : '';
+  $('gate-list').innerHTML = save.gates.length ? save.gates.map(x => `<li><b>🌀 ${esc(x.name)}</b><button data-w="${x.id}">ワープ</button></li>`).join('') : '<li class="note">まだゲートがありません</li>';
+  $('gate-list').querySelectorAll('button[data-w]').forEach(b => b.onclick = () => { $('adv').hidden = true; warpTo(save.gates.find(x => x.id === b.dataset.w)); });
+  $('gate-add').textContent = `🌀 ゲートを置く (${GATE_COST}🪙) ${save.gates.length}/${MAX_GATES}`;
   $('imp-hist').innerHTML = save.imports.map(h => `<li><b>${esc(h.name)}</b><small>${h.date} ・ ${esc(h.summary)}</small></li>`).join('');
 }
 $('adv-export').onclick = () => {          // このアプリの記録を、GPXファイルとして書き出す(時刻つきの記録があれば、時刻つき)
@@ -1376,6 +1379,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 setTimeout(importShared, 2500);
 $('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
+$('gate-add').onclick = startPlacingGate;
 $('adv-toggle').onclick = () => { if (mode === 'adventure') returnToReal(); else { autoAdv = false; setMode('adventure'); } $('adv').hidden = true; };
 $('real-go').onclick = returnToReal;
 $('imp-file').onchange = async e => {
@@ -1394,6 +1398,7 @@ $('imp-paste-go').onclick = async () => {        // ファイルが選べない�
 map.on('dragstart', () => { follow = false; });
 map.on('click', e => {
   const ll = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+  if (placingGate) return placeGateAt(ll);
   if (placing) return placeAt(ll);
   if (mode === 'adventure') return advGo(ll);
   if (debug) updatePosition(ll.lat, ll.lng, 0);
@@ -1408,8 +1413,8 @@ $('btn-debug').onclick = () => {
 $('btn-build').onclick = openBuildMenu;
 $('build-close').onclick = () => { $('build').hidden = true; };
 $('obj-close').onclick = () => { $('obj').hidden = true; };
-$('place-cancel').onclick = stopPlacing;
-$('place-here').onclick = () => placeAt(me);
+$('place-cancel').onclick = () => { stopPlacing(); stopPlacingGate(); };
+$('place-here').onclick = () => placingGate ? placeGateAt(me) : placeAt(me);
 let bookTab = 'region', bookFresh = true;
 function citySummary(c, n) {          // [進み具合%, 星, 「発見/総数」]
   if (!c || !c.total) return [0, c && c.tier ? ' ' + tierStars(c.tier) : '', ''];
@@ -1539,4 +1544,58 @@ else {
 }
 save.coins.forEach(addCoinMarker);
 save.built.forEach(o => addBuiltMarker(o, false));
+
+// ---- ワープゲート: 行ったことのある場所(霧が晴れた場所)に置くと、冒険モードでいつでもそこへ飛べる ----
+const GATE_COST = 30, MAX_GATES = 12;
+save.gates = save.gates || [];
+const gateMarkers = new Map();
+let placingGate = false;
+const cellOf = p => Math.floor(p.lat / dLat) + ',' + Math.floor(p.lng / dLng(p.lat));
+const visited = p => explored.has(cellOf(p));
+const gateHtml = g => `<div class="gate"><svg viewBox="0 0 64 64" width="58" height="58"><defs><radialGradient id="gg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="#9be7ff"/><stop offset="1" stop-color="#6a4bd8"/></radialGradient></defs><ellipse cx="32" cy="50" rx="24" ry="8" fill="#000" opacity=".25"/><path d="M12 52V26a20 20 0 0 1 40 0v26" fill="none" stroke="#8a7a66" stroke-width="7" stroke-linecap="round"/><path d="M12 52V26a20 20 0 0 1 40 0v26" fill="none" stroke="#c9b99f" stroke-width="3" stroke-linecap="round"/><ellipse class="gv" cx="32" cy="38" rx="14" ry="19" fill="url(#gg)"/><path class="gs" d="M32 22c8 0 12 8 6 13s-12 2-10 9" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".85"/></svg><i class="gn">${esc(g.name)}</i></div>`;
+function addGateMarker(g) { gateMarkers.set(g.id, addPin(g, '', gateHtml(g), () => openGate(g))); }
+save.gates.forEach(addGateMarker);
+function nearName(p) {
+  let best = null, bd = 200;
+  for (const q of pois.values()) { const d = dist(p, q); if (d < bd && save.found[q.id]) { bd = d; best = q; } }
+  return best ? best.name : (save.gates.length + 1) + '番のゲート';
+}
+function startPlacingGate() {
+  if (save.gates.length >= MAX_GATES) return toast(`ゲートは${MAX_GATES}個までです`);
+  if (save.gold < GATE_COST) return toast(`コインが足りません (${GATE_COST}🪙)`);
+  placing = null; placingGate = true; $('adv').hidden = true; $('build').hidden = true;
+  $('place-text').textContent = `🌀 ワープゲート(${GATE_COST}🪙)を置く場所をタップ — 行ったことのある場所(霧が晴れた所)だけ置けます`;
+  $('placebar').hidden = false; $('place-here').hidden = !me;
+}
+function stopPlacingGate() { placingGate = false; $('placebar').hidden = true; $('place-here').hidden = false; }
+function placeGateAt(ll) {
+  if (!visited(ll)) return toast('ここはまだ行ったことがありません(霧が晴れた場所に置こう)');
+  if (save.gold < GATE_COST) return toast('コインが足りません');
+  if (save.gates.some(x => dist(x, ll) < 60)) return toast('近くにゲートがあります');
+  const gt = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), lat: ll.lat, lng: ll.lng, name: nearName(ll), d: todayStr() };
+  save.gates.push(gt); addGateMarker(gt); addGold(-GATE_COST); stopPlacingGate(); persist(); updateHud();
+  celebrate('🌀', `ワープゲート「${gt.name}」`); renderAdvPanel();
+}
+function warpTo(gt) {
+  if (mode !== 'adventure') { autoAdv = false; setMode('adventure'); }
+  stopAdv(); last = null; follow = true;
+  updatePosition(gt.lat, gt.lng, 0, true); snapCamera(); updateRealGhost();
+  const fl = document.createElement('div'); fl.className = 'warpflash'; document.body.appendChild(fl); setTimeout(() => fl.remove(), 900);
+  toast(`🌀 ワープ！ ${gt.name}`); persist();
+}
+function openGate(gt) {
+  if (placing || placingGate) return;
+  $('obj-title').innerHTML = `<span class="ic">🌀</span>${esc(gt.name)}`;
+  $('obj-sub').innerHTML = `<div>行ったことのある場所へ、一瞬で飛べるゲート。冒険モードでは、どこからでも使えます。</div><div>設置: ${gt.d}</div>`;
+  const eb = $('obj-evo'); eb.hidden = false; eb.disabled = false; eb.textContent = '🌀 ここへワープする';
+  eb.onclick = () => { $('obj').hidden = true; warpTo(gt); };
+  $('obj-del').textContent = 'ゲートを撤去する (返金なし)';
+  $('obj-del').onclick = () => { removeGate(gt); $('obj').hidden = true; };
+  $('obj').hidden = false;
+}
+function removeGate(gt) {
+  const m = gateMarkers.get(gt.id); if (m) m.remove(); gateMarkers.delete(gt.id);
+  save.gates.splice(save.gates.indexOf(gt), 1); persist(); renderAdvPanel();
+}
+
 updateWallet(); updateHud(); gameReady = true;
