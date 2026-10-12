@@ -156,3 +156,13 @@ svg.jp text{font-size:8px}
 #adv-export{margin-bottom:8px}
 .awake{display:block;font-size:13px;margin:6px 0 10px;line-height:1.5}.awake small{opacity:.7}.awake input{margin-right:6px;transform:scale(1.2)}
 .paste{margin:4px 0 10px;font-size:13px}.paste summary{cursor:pointer;margin-bottom:6px}.paste textarea{width:100%;box-sizing:border-box;font-size:12px;border:1px solid #cdbb8a;border-radius:8px;background:#fff8e1;padding:6px;margin-bottom:6px}
+
+/* 名所(発見後): 種類ごとの色に光る石の台座と、巻物のような名札 */
+.obj.found .base{position:relative;width:64px;height:22px;background:radial-gradient(ellipse at 50% 35%,#f8efd8,#cdbb94 58%,#9a8660);box-shadow:0 4px 0 #6f5b3c,inset 0 0 0 2px rgba(255,255,255,.35)}
+.obj.found .base::before{content:"";position:absolute;inset:-9px -12px;border-radius:50%;background:radial-gradient(var(--c,#ffd873),transparent 70%);opacity:.55;z-index:-1;animation:aura 3.2s ease-in-out infinite alternate}
+.obj.found .base::after{content:"";position:absolute;inset:4px 11px;border-radius:50%;border:1.5px dashed var(--c,#ffd873);opacity:.9;filter:brightness(.8)}
+@keyframes aura{from{opacity:.35;transform:scale(.94)}to{opacity:.7;transform:scale(1.06)}}
+.obj.found .sp svg{filter:drop-shadow(0 3px 2px rgba(20,10,30,.35))}
+.obj.found .nm{background:linear-gradient(#fff9e6,#f0dca6);border:1.5px solid #8a6a3a;border-radius:7px;box-shadow:0 2px 5px rgba(0,0,0,.4);padding:1px 8px;font-size:11px}
+.obj.unk .base{width:46px;height:16px}
+.obj.unk .sp svg{filter:drop-shadow(0 0 8px rgba(183,155,255,.9))}

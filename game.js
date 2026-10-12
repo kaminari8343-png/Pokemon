@@ -300,10 +300,20 @@ requestAnimationFrame(frame);
 
 // ---- 名所: 現実の場所(OpenStreetMap)を冒険の名所に変換 ----
 function classify(t) {
-  if (t.amenity === 'place_of_worship' || t.shrine || t.historic === 'shrine') return { e: '⛩️', k: 'ほこら' };
+  const nm = t['name:ja'] || t.name || '';
+  if (t.amenity === 'place_of_worship' || t.shrine || t.historic === 'shrine') {
+    if (t.religion === 'buddhist' || /寺|院$|大仏/.test(nm)) return { e: '🛕', k: '古刹' };
+    if (t.religion === 'christian' || /教会|チャペル|聖堂/.test(nm)) return { e: '⛪', k: '礼拝堂' };
+    return { e: '⛩️', k: 'ほこら' };
+  }
+  if (t.historic === 'castle' || /城$|城跡|城址/.test(nm)) return { e: '🏯', k: '古城' };
   if (t.historic) return { e: '🏰', k: '古い遺跡' };
-  if (/park|garden|nature_reserve/.test(t.leisure || '')) return { e: '🌳', k: '森の広場' };
-  if (/viewpoint|attraction|artwork|museum|gallery/.test(t.tourism || '')) return { e: '🔮', k: 'ふしぎな水晶' };
+  if (t.leisure === 'garden') return { e: '🌷', k: '花の庭園' };
+  if (/park|nature_reserve/.test(t.leisure || '')) return { e: '🌳', k: '森の広場' };
+  if (t.tourism === 'viewpoint' || t.man_made === 'tower' || t.man_made === 'observatory') return { e: '🔭', k: '星見台' };
+  if (t.tourism === 'artwork') return { e: '🗿', k: 'ふしぎな石像' };
+  if (/museum|gallery/.test(t.tourism || '')) return { e: '🏛️', k: '知の殿堂' };
+  if (t.tourism === 'attraction') return { e: '🔮', k: 'ふしぎな水晶' };
   if (t.railway === 'station') return { e: '🚉', k: '旅の門' };
   if (t.amenity === 'public_bath') return { e: '♨️', k: '癒しの泉' };
   if (t.amenity === 'cafe') return { e: '☕', k: '旅人の宿' };
@@ -319,13 +329,20 @@ const FLAVOR = {
   '癒しの泉': ['疲れがすうっと消えていく。'],
   '旅人の宿': ['あたたかい香りがただよう。', 'ひと休みして冒険に備えよう。'],
   '知恵の書庫': ['古い本のにおいがする。'],
+  '古刹': ['静かな鐘の音が響く。', 'お香のやさしい香りがただよう。'],
+  '礼拝堂': ['やわらかな光が差しこんでいる。', '祈りの歌声が聞こえた気がする。'],
+  '古城': ['石垣が、むかしの物語を語っている。', '天守から遠くの街が見える気がする。'],
+  '花の庭園': ['色とりどりの花が揺れている。', 'ちょうちょが花から花へ舞う。'],
+  '星見台': ['夜になれば、星がよく見えそうだ。', '望遠鏡が、空の彼方を指している。'],
+  'ふしぎな石像': ['石像の目が、一瞬光った気がする。', '苔むした像が、旅人を見守っている。'],
+  '知の殿堂': ['静かな展示室に、むかしの宝物が眠る。', '知識の光が、あたりを照らす。'],
 };
 const flavor = p => { const l = FLAVOR[p.k] || ['不思議な気配がする。']; let h = 0; for (const ch of p.id) h += ch.charCodeAt(0); return l[h % l.length]; };
 const pois = new Map();          // id -> {id,e,k,name,lat,lng,marker}
 let poiCenter = null, poiFetching = false, poiFailedAt = 0;
 const poiHtml = (p, found) => found
-  ? `<div class="obj found"><span class="sp">${ART.poi(p.k, 58)}</span><div class="base"></div><span class="nm">${esc(p.name)}</span></div>`
-  : `<div class="obj unk"><span class="sp q">❓</span><div class="base"></div></div>`;
+  ? `<div class="obj found" style="--c:${ART.poiColor(p.k)}"><span class="sp">${ART.poi(p.k, 66)}</span><div class="base"></div><span class="nm">${esc(p.name)}</span></div>`
+  : `<div class="obj unk"><span class="sp">${ART.unknown(54)}</span><div class="base"></div></div>`;
 async function fetchPois(center) {
   poiFetching = true;
   const a = `(around:${POI_RADIUS},${center.lat.toFixed(5)},${center.lng.toFixed(5)})`;

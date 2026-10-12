@@ -100,20 +100,85 @@ window.ART = (function () {
       () => glow('cg3', 32, 22, 32, '#ffe066', 0.6) + grp(2.5, 7, 0.92, keep(4, 13, 40, '#f5c542') + keep(47, 13, 40, '#f5c542') + keep(18, 28, 34, '#e8b23a') + keep(26, 12, 46, '#f5c542', '#f1ead8') + path('M26 57 V45 Q32 38 38 45 V57 Z', '#6a4a2a')) +
         path('M20 12 L24 3 L28 10 L32 1 L36 10 L40 3 L44 12 Z', '#ffd24a') + sparkle(10, 8, 1.1) + sparkle(54, 10, 1.1)],
   };
-  // ---- 名所 ----
+  // ---- 名所(15種類。光と影・ツヤのある絵で、一部は動く) ----
+  const O2 = '#3b2a3a', S2 = `stroke="${O2}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"`;
+  const LG = (id, top, bot) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bot}"/></linearGradient>`;
+  const LGH = (id, l, r) => `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${l}"/><stop offset="1" stop-color="${r}"/></linearGradient>`;
+  const df = (...s) => `<defs>${s.join('')}</defs>`;
+  const sh2 = (cx = 32, cy = 58, rx = 22, ry = 4) => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="rgba(20,10,30,.3)"/>`;
+  const r2 = (x, y, w, h, f, rd = 1.5) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rd}" fill="${f}" ${S2}/>`;
+  const p2 = (pts, f) => `<polygon points="${pts}" fill="${f}" ${S2}/>`;
+  const d2 = (d, f) => `<path d="${d}" fill="${f}" ${S2}/>`;
+  const c2 = (x, y, r, f) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}" ${S2}/>`;
+  const hi = (d, c = 'rgba(255,255,255,.6)', w = 1.4) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const an = (attr, values, dur) => `<animate attributeName="${attr}" values="${values}" dur="${dur}s" repeatCount="indefinite"/>`;
+  const mv = (values, dur) => `<animateTransform attributeName="transform" type="translate" values="${values}" dur="${dur}s" repeatCount="indefinite"/>`;
+  const star4 = (x, y, s, dur = 2) => `<polygon points="${starPts(x, y, 4 * s, 1.1 * s, 4)}" fill="#fff6b0">${an('opacity', '1;.2;1', dur)}</polygon>`;
+  const stoneLamp = (x, id) => `<g transform="translate(${x} 0)">` + r2(-4, 53, 8, 4, `url(#${id})`) + r2(-1.6, 45, 3.2, 8, `url(#${id})`) + r2(-4, 38, 8, 7, '#ffd26e') + `<rect x="-2.4" y="39.6" width="4.8" height="4" fill="#fff3b0" stroke="none">${an('opacity', '1;.55;1;.8;1', 1.6)}</rect>` + p2('-6,38 6,38 0,31', `url(#${id})`) + '</g>';
   const POI = {
-    'ほこら': () => ITEMS.shrine[0](),
-    '古い遺跡': () => rect(8, 26, 11, 31, '#cfc7b6') + poly('8,26 12,20 15,25 19,22 19,26', '#cfc7b6') + rect(26, 14, 11, 43, '#d9d2c0') + poly('26,14 30,9 33,13 37,10 37,14', '#d9d2c0') +
-      rect(42, 44, 16, 13, '#bdb5a2') + rect(46, 36, 9, 8, '#cfc7b6') + circ(10, 55, 4, '#62b350') + circ(40, 56, 3.5, '#62b350') + circ(30, 40, 2, '#62b350', false) + sparkle(50, 22, 1),
-    '森の広場': () => ITEMS.tree[0]() + circ(12, 54, 7, '#62b350') + circ(52, 54, 7, '#62b350') + circ(12, 52, 2, '#ff9ec7', false) + circ(52, 52, 2, '#ffd24a', false),
-    'ふしぎな水晶': () => glow('pg1', 32, 32, 30, '#c9a8ff', 0.7) + poly('32,4 43,24 39,56 25,56 21,24', '#b79bff') + poly('32,4 43,24 32,27', '#e3d6ff') + poly('15,32 22,26 24,56 10,56', '#9a7bf0') + poly('49,34 55,40 54,56 42,56', '#a98af7') + sparkle(54, 16, 1.4) + sparkle(10, 18, 1.1),
-    '旅の門': () => glow('pg2', 32, 36, 28, '#8fb2ff', 0.7) + `<defs><radialGradient id="ptl"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#9fb8ff"/><stop offset="1" stop-color="#7a5ae0"/></radialGradient></defs>` +
-      ell(32, 38, 13, 19, 'url(#ptl)') + path('M8 58 V30 Q8 6 32 6 Q56 6 56 30 V58 H46 V32 Q46 16 32 16 Q18 16 18 32 V58 Z', '#b8b2a4') + sparkle(32, 36, 1.4) + line(12, 36, 15, 36, '#8f897c', 1.5) + line(49, 46, 52, 46, '#8f897c', 1.5),
-    '癒しの泉': () => ITEMS.fountain[0]() + arc('M22 36 Q18 28 24 22 Q28 16 24 10', '#fff', 2.5) + arc('M38 34 Q34 26 40 20 Q44 14 40 8', '#fff', 2.5),
-    '旅人の宿': () => house('#6a8fe0', '#ffe9c2', '#8b5a2b') + line(50, 22, 50, 32, O, 2) + rect(46, 22, 14, 9, '#c98a4b') + rect(49, 24, 6, 5, '#fff', 1) + arc('M55 25 Q58 26 55 28', '#fff', 1.4) + sparkle(8, 12, 1),
-    '知恵の書庫': () => rect(10, 45, 44, 11, '#d9544a') + rect(14, 35, 38, 10, '#4a7fd9') + rect(8, 25, 42, 10, '#3fa76a') + rect(16, 15, 34, 10, '#e0a93a') +
-      line(14, 50, 50, 50, '#fff', 1.4) + line(18, 40, 48, 40, '#fff', 1.4) + line(12, 30, 46, 30, '#fff', 1.4) + sparkle(54, 12, 1.2) + sparkle(8, 12, 0.9),
+    'ほこら': () => df(LG('sh1', '#ff8a66', '#c63a2a'), LG('sh2', '#e2dccb', '#9c9484'), LG('sh3', '#8d2b21', '#5a1812')) + glow('shg', 32, 36, 30, '#ffd98a', 0.4) + sh2() +
+      stoneLamp(9, 'sh2') + stoneLamp(55, 'sh2') + r2(16.5, 22, 5, 35, 'url(#sh1)') + r2(42.5, 22, 5, 35, 'url(#sh1)') + hi('M18.5 24 V54') + hi('M44.5 24 V54') +
+      r2(12, 30, 40, 4, 'url(#sh1)') + d2('M6 18 Q32 9 58 18 L56 24 Q32 17 8 24 Z', 'url(#sh3)') + hi('M10 19 Q32 12 54 19', 'rgba(255,200,170,.6)') + r2(29, 25, 6, 6, '#2a2430', 1) +
+      r2(20, 55, 24, 3, 'url(#sh2)') + star4(32, 10, 1, 2.6),
+    '古刹': () => df(LG('tp1', '#e2574c', '#a82e26'), LG('tp2', '#5d6b80', '#38445a'), LG('tp3', '#d9d2c0', '#9c9484')) + glow('tpg', 32, 30, 30, '#ffe08a', 0.3) + sh2() + r2(16, 54, 32, 4, 'url(#tp3)') +
+      [0, 1, 2].map(i => { const y = 52 - i * 14, w = 15 - i * 3; return r2(32 - w + 3, y - 10, 2 * (w - 3), 10, 'url(#tp1)') + r2(30, y - 8, 4, 8, '#ffcf6e', 1) + p2(`${32 - w - 3},${y - 8} ${32 - w + 2},${y - 14} ${32 + w - 2},${y - 14} ${32 + w + 3},${y - 8}`, 'url(#tp2)') + hi(`M${32 - w} ${y - 9} H${32 + w}`, 'rgba(255,255,255,.35)', 1.2); }).join('') +
+      `<line x1="32" y1="11" x2="32" y2="2" stroke="${O2}" stroke-width="2"/>` + [4, 6.5, 9].map(y => `<ellipse cx="32" cy="${y}" rx="2.6" ry="1" fill="#ffd24a" ${S2}/>`).join('') + `<circle cx="32" cy="52" r="1.6" fill="#fff3b0">${an('opacity', '1;.5;1', 2)}</circle>`,
+    '礼拝堂': () => df(LG('ch1', '#fff8e8', '#e6d6b4'), LG('ch2', '#7a96c8', '#4a6498')) + glow('chg', 32, 38, 30, '#cfe0ff', 0.4) + sh2() + r2(14, 34, 36, 23, 'url(#ch1)') + p2('9,36 32,21 55,36', 'url(#ch2)') + hi('M13 36 L32 24 L51 36', 'rgba(255,255,255,.4)') +
+      r2(27, 9, 10, 15, 'url(#ch1)') + p2('26,10 38,10 32,0', 'url(#ch2)') + `<path d="M32 -1 V-6 M29 -4 H35" stroke="#ffd24a" stroke-width="1.6"/>` +
+      `<circle cx="32" cy="30" r="4.4" fill="#ffd26e" ${S2}>${an('fill-opacity', '1;.6;1', 3)}</circle>` + hi('M32 26 V34 M28 30 H36', '#8a5a1a', 1) + d2('M27 57 V47 Q32 41 37 47 V57 Z', '#6a4a3a') + r2(16, 42, 6, 9, '#9fd0ff', 3) + r2(42, 42, 6, 9, '#9fd0ff', 3),
+    '古城': () => df(LG('cs1', '#ffffff', '#e4dccb'), LG('cs2', '#6b7a8e', '#3e495a'), LG('cs3', '#b3ad9c', '#7c7766')) + glow('csg', 32, 28, 32, '#fff0b0', 0.3) + sh2() + d2('M6 58 L13 40 H51 L58 58 Z', 'url(#cs3)') +
+      hi('M10 50 H54 M12 45 H52', 'rgba(60,50,40,.4)', 1) + r2(15, 30, 34, 10, 'url(#cs1)') + [20, 28, 36].map(x => `<rect x="${x}" y="33" width="4" height="4" fill="#3a3a4a"/>`).join('') + p2('9,31 55,31 49,25 15,25', 'url(#cs2)') +
+      r2(20, 19, 24, 6, 'url(#cs1)') + p2('15,20 49,20 43,14 21,14', 'url(#cs2)') + r2(26, 9, 12, 5, 'url(#cs1)') + p2('22,10 42,10 32,2', 'url(#cs2)') + `<circle cx="22" cy="10" r="1.6" fill="#ffd24a"/><circle cx="42" cy="10" r="1.6" fill="#ffd24a"/>` +
+      `<line x1="32" y1="2" x2="32" y2="-4" stroke="${O2}" stroke-width="1.6"/><polygon points="32,-4 40,-2 32,0" fill="#e2574c">${an('opacity', '1;.7;1', 1.5)}</polygon>` + d2('M29 58 V48 Q32 44 35 48 V58 Z', '#3a2a2a'),
+    '古い遺跡': () => df(LG('ru1', '#e9e2d0', '#a8a08c'), LG('ru2', '#d5ccb6', '#8e8672')) + glow('rug', 34, 40, 28, '#8ff0c0', 0.3) + sh2() +
+      r2(9, 24, 10, 33, 'url(#ru1)') + p2('9,24 12,19 15,23 19,20 19,24', 'url(#ru1)') + hi('M12 26 V54 M16 26 V54', 'rgba(60,50,40,.3)', 1) +
+      r2(25, 12, 11, 45, 'url(#ru1)') + p2('25,12 28,6 32,11 36,8 36,12', 'url(#ru1)') + hi('M28 14 V55 M32 14 V55', 'rgba(60,50,40,.3)', 1) +
+      d2('M40 57 V42 Q40 34 47 34 Q54 34 54 42 V57 Z', 'url(#ru2)') + r2(35, 49, 10, 8, 'url(#ru2)') +
+      `<rect x="41" y="40" width="9" height="7" rx="1.5" fill="#7ff0b0" stroke="${O2}" stroke-width="1.2">${an('fill-opacity', '1;.35;1', 2.4)}</rect>` + hi('M43 44 H48 M45.5 41.5 V46', '#205a40', 1) +
+      c2(11, 56, 3.2, '#62b350') + c2(34, 57, 2.6, '#62b350') + hi('M19 30 Q22 38 18 46', '#4aa040', 1.6) + star4(48, 22, 0.9, 3),
+    '森の広場': () => df(LG('fo1', '#8fd873', '#4a9d4a'), LG('fo2', '#a56a3a', '#6a4220')) + glow('fog', 32, 30, 30, '#d8ffb0', 0.35) + sh2() +
+      r2(28, 34, 8, 23, 'url(#fo2)') + c2(32, 24, 16, 'url(#fo1)') + c2(20, 32, 10.5, 'url(#fo1)') + c2(44, 32, 10.5, 'url(#fo1)') + hi('M22 18 Q28 12 36 14', 'rgba(255,255,255,.45)', 2) +
+      r2(42, 47, 16, 3.5, '#c98a4b', 1) + r2(43.5, 50.5, 2.5, 6, '#8b5a2b', 0.5) + r2(54, 50.5, 2.5, 6, '#8b5a2b', 0.5) + c2(12, 55, 3.4, '#ff9ec7') + c2(18, 56.5, 2.6, '#ffd24a') + c2(8, 57, 2.4, '#fff') +
+      `<g><ellipse cx="14" cy="14" rx="2.4" ry="1.2" fill="#a6e07a">${an('opacity', '1;0;1', 4)}</ellipse>${mv('0 0;-6 30;-10 44', 4)}</g>`,
+    '花の庭園': () => df(LG('ga1', '#ff9ec7', '#e0558f'), LG('ga2', '#c98a4b', '#8b5a2b')) + glow('gag', 32, 34, 30, '#ffd0e8', 0.4) + sh2() +
+      r2(10, 20, 4, 37, 'url(#ga2)') + r2(50, 20, 4, 37, 'url(#ga2)') + `<path d="M12 22 Q32 -4 52 22" fill="none" stroke="#8b5a2b" stroke-width="4.2" stroke-linecap="round"/><path d="M12 22 Q32 -4 52 22" fill="none" stroke="#b9774a" stroke-width="1.6" stroke-linecap="round"/>` +
+      [[14, 30], [12, 40], [14, 50], [50, 30], [52, 40], [50, 50], [20, 12], [32, 7], [44, 12], [26, 9], [38, 9]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${3.2 - (i % 2) * 0.5}" fill="${i % 3 ? 'url(#ga1)' : '#fff3c0'}" stroke="#a02a5a" stroke-width="1"/>`).join('') +
+      [20, 28, 36, 44].map((x, i) => c2(x, 55, 3, ['#ff6b8a', '#ffd24a', '#b79bff', '#6ec6ff'][i])).join('') + hi('M16 57 H48', '#4a8a3a', 2.4) +
+      `<g><path d="M30 22 Q26 18 28 15 Q31 17 31 22 Q34 17 37 15 Q38 18 33 22 Z" fill="#ffb347" stroke="${O2}" stroke-width=".8">${an('opacity', '1;.6;1', .8)}</path>${mv('0 0;6 -6;14 2;0 0', 6)}</g>`,
+    '星見台': () => df(LG('ob1', '#f1e3c8', '#bba98a'), LG('ob2', '#8fa6ff', '#4a5ec8')) + glow('obg', 32, 20, 32, '#a0b4ff', 0.5) + sh2() + d2('M23 58 L27 24 H37 L41 58 Z', 'url(#ob1)') + hi('M28 30 L25 56', 'rgba(255,255,255,.5)') +
+      r2(21, 55, 22, 3, '#8f8368', 1) + d2('M21 26 A11 11 0 0 1 43 26 Z', 'url(#ob2)') + hi('M24 22 A8 8 0 0 1 32 17', 'rgba(255,255,255,.55)', 1.6) + `<rect x="31" y="13" width="2.4" height="12" fill="#1a1a3a"/>` +
+      `<line x1="34" y1="19" x2="50" y2="5" stroke="${O2}" stroke-width="4" stroke-linecap="round"/><line x1="34" y1="19" x2="50" y2="5" stroke="#cfd8ff" stroke-width="1.8" stroke-linecap="round"/>` +
+      r2(31, 40, 4, 8, '#ffd26e', 1) + star4(10, 12, 1.3, 2.2) + star4(54, 30, 1, 1.7) + star4(14, 32, 0.9, 2.9) + `<path d="M52 14 A6 6 0 1 0 56 24 A4.6 4.6 0 1 1 52 14 Z" fill="#fff3b0" stroke="none"/>`,
+    'ふしぎな石像': () => df(LG('st1', '#b8c4b0', '#7a8a78'), LG('st2', '#d9d2c0', '#9c9484')) + glow('stg', 32, 30, 30, '#7fe0c0', 0.4) + sh2() + r2(16, 46, 32, 11, 'url(#st2)') + r2(12, 54, 40, 4, 'url(#st2)') +
+      `<ellipse cx="32" cy="38" rx="12" ry="9" fill="url(#st1)" ${S2}/>` + [0, 1, 2, 3, 4, 5, 6].map(i => { const a = Math.PI + i * Math.PI / 6; return c2((32 + Math.cos(a) * 12).toFixed(1), (24 + Math.sin(a) * 9 * 0.9).toFixed(1), 3.6, 'url(#st1)'); }).join('') + c2(32, 26, 9, 'url(#st1)') +
+      `<circle cx="28" cy="25" r="2" fill="#7fffd0">${an('fill-opacity', '1;.4;1', 2.2)}</circle><circle cx="36" cy="25" r="2" fill="#7fffd0">${an('fill-opacity', '1;.4;1', 2.2)}</circle>` + d2('M28 31 Q32 34 36 31', '#5a6a58') + hi('M24 40 Q30 36 38 40', 'rgba(255,255,255,.4)') + c2(20, 49, 2.6, '#62b350') + c2(46, 51, 2.2, '#62b350') + star4(52, 14, 1, 2.8),
+    'ふしぎな水晶': () => df(LG('cr1', '#f1e8ff', '#8a6ae8'), LG('cr2', '#d5c4ff', '#6a48c8'), LG('cr3', '#ffffff', '#c9a8ff')) + glow('crg', 32, 32, 31, '#c9a8ff', 0.75) + sh2(32, 58, 18, 3.4) +
+      p2('13,32 20,26 22,57 8,57', 'url(#cr2)') + p2('51,34 57,40 56,57 44,57', 'url(#cr2)') + p2('32,3 44,23 40,57 24,57 20,23', 'url(#cr1)') + p2('32,3 44,23 32,27', 'url(#cr3)') + hi('M26 26 L27 52', 'rgba(255,255,255,.7)', 1.8) +
+      `<polygon points="32,12 38,26 35,50 29,50 26,26" fill="#fff" fill-opacity=".35">${an('fill-opacity', '.15;.6;.15', 2.6)}</polygon>` + `<g>${star4(10, 18, 1.2, 2.1)}${mv('0 0;0 -4;0 0', 3)}</g><g>${star4(54, 14, 1.4, 1.8)}${mv('0 0;0 -5;0 0', 3.6)}</g>`,
+    '知の殿堂': () => df(LG('mu1', '#fff6e0', '#d9c9a0'), LG('mu2', '#e2d8bc', '#a8996c')) + glow('mug', 32, 30, 30, '#ffe08a', 0.35) + sh2() + r2(8, 54, 48, 4, 'url(#mu2)') + r2(11, 51, 42, 3.4, 'url(#mu2)') + p2('7,24 32,8 57,24', 'url(#mu1)') + r2(9, 24, 46, 4, 'url(#mu2)') +
+      [14, 24, 36, 46].map(x => r2(x, 28, 5, 23, 'url(#mu1)', 1) + hi(`M${x + 1.6} 30 V49`, 'rgba(120,100,60,.35)', 1)).join('') + `<circle cx="32" cy="19" r="3.2" fill="#ffd24a" ${S2}>${an('fill-opacity', '1;.6;1', 3)}</circle>` + r2(28, 38, 8, 13, '#ffd26e', 1) + hi('M32 38 V51', '#a8782a', 1) + star4(10, 10, 1, 2.4) + star4(54, 10, 1, 3),
+    '旅の門': () => df(LG('pt1', '#c9c2b0', '#8a8472'), `<radialGradient id="ptl2"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#9fb8ff"/><stop offset="1" stop-color="#6a4ad8"/></radialGradient>`, `<clipPath id="ptc"><ellipse cx="32" cy="36" rx="13" ry="19"/></clipPath>`) + glow('ptg', 32, 36, 31, '#8fb2ff', 0.7) + sh2() +
+      `<ellipse cx="32" cy="36" rx="13" ry="19" fill="url(#ptl2)"/><g clip-path="url(#ptc)"><g><animateTransform attributeName="transform" type="rotate" from="0 32 36" to="360 32 36" dur="5s" repeatCount="indefinite"/><path d="M32 36 Q46 30 40 18 M32 36 Q18 42 24 54 M32 36 Q42 48 54 42 M32 36 Q22 24 10 30" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".85"/></g></g>` +
+      d2('M7 58 V30 Q7 5 32 5 Q57 5 57 30 V58 H46 V31 Q46 16 32 16 Q18 16 18 31 V58 Z', 'url(#pt1)') + hi('M10 30 Q10 9 32 8', 'rgba(255,255,255,.5)', 1.6) + p2('28,5 36,5 34,13 30,13', '#e8dcc0') + star4(32, 36, 1.3, 1.6) + hi('M12 40 H15 M49 48 H52 M11 50 H14', '#6f6a5a', 1.3),
+    '癒しの泉': () => df(LG('sp1', '#9ff0e8', '#3fb8c8'), LG('sp2', '#b5b0a2', '#78746a')) + glow('spg', 32, 38, 30, '#bff8f0', 0.4) + sh2(32, 58, 26, 4) + `<ellipse cx="32" cy="46" rx="26" ry="11" fill="url(#sp2)" ${S2}/><ellipse cx="32" cy="45" rx="21" ry="8.5" fill="url(#sp1)" stroke="#2a8a98" stroke-width="1.2"/>` +
+      hi('M16 44 Q24 41 32 44 Q40 47 48 44', 'rgba(255,255,255,.6)', 1.4) + [[8, 52], [18, 55], [47, 55], [56, 51], [12, 40], [52, 40]].map(([x, y], i) => `<ellipse cx="${x}" cy="${y}" rx="${5 - (i % 2)}" ry="3.4" fill="url(#sp2)" ${S2}/>`).join('') +
+      [22, 32, 42].map((x, i) => `<g><path d="M${x} 38 Q${x - 4} 30 ${x} 22 Q${x + 4} 14 ${x} 6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".7">${an('opacity', '.15;.8;.15', 2.8 + i * 0.5)}</path>${mv('0 4;0 -4;0 4', 3 + i * 0.4)}</g>`).join('') + r2(48, 28, 8, 8, '#c98a4b', 2),
+    '旅人の宿': () => df(LG('in1', '#fff1d6', '#e0c590'), LG('in2', '#8a5a3a', '#523420')) + glow('ing', 32, 36, 30, '#ffb27a', 0.4) + sh2() + r2(11, 30, 42, 27, 'url(#in1)') + [18, 32, 46].map(x => `<line x1="${x}" y1="30" x2="${x}" y2="57" stroke="#7a4a2a" stroke-width="1.8"/>`).join('') + `<line x1="11" y1="44" x2="53" y2="44" stroke="#7a4a2a" stroke-width="1.8"/>` +
+      d2('M6 32 Q8 24 20 20 L44 20 Q56 24 58 32 Z', 'url(#in2)') + hi('M10 31 Q12 25 22 22', 'rgba(255,220,180,.5)') + r2(40, 6, 5, 12, '#8a5a3a', 1) +
+      `<g><circle cx="42.5" cy="4" r="2.6" fill="#fff" opacity=".7">${an('opacity', '.7;0;.7', 3)}</circle>${mv('0 0;3 -6;0 0', 3)}</g>` +
+      [14, 40].map(x => `<rect x="${x}" y="34" width="8" height="8" rx="1.5" fill="#ffd26e" stroke="${O2}" stroke-width="1.2">${an('fill-opacity', '1;.6;1;.85;1', 2 + x / 40)}</rect>`).join('') +
+      r2(26, 40, 12, 17, '#6a3a2a', 1.5) + [0, 1, 2].map(i => `<path d="M${27 + i * 4} 39 V47 L${29 + i * 4} 45 L${31 + i * 4} 47 V39 Z" fill="#2a3a6a" ${S2.replace('1.5', '.8')}/>`).join('') +
+      `<line x1="9" y1="30" x2="9" y2="36" stroke="${O2}" stroke-width="1.4"/><ellipse cx="9" cy="39" rx="3.4" ry="4.4" fill="#e2574c" ${S2}>${an('fill-opacity', '1;.7;1', 1.8)}</ellipse>`,
+    '知恵の書庫': () => df(LG('li1', '#8a6ae0', '#4a3aa0'), LG('li2', '#e8d9b0', '#b39a60')) + glow('lig', 32, 30, 31, '#ffe08a', 0.45) + sh2() + r2(12, 26, 40, 31, 'url(#li2)') + p2('8,28 32,12 56,28', 'url(#li1)') + hi('M12 28 L32 15', 'rgba(255,255,255,.4)') +
+      d2('M24 57 V42 Q32 34 40 42 V57 Z', '#3a2a5a') + `<path d="M26 56 V44 Q32 38 38 44 V56" fill="#ffd26e" fill-opacity=".5">${an('fill-opacity', '.25;.65;.25', 2.4)}</path>` +
+      [['#d9544a', 17], ['#4a7fd9', 21], ['#3fa76a', 25]].map(([c, x]) => `<rect x="${x - 3}" y="31" width="3.4" height="9" fill="${c}" stroke="${O2}" stroke-width=".8"/>`).join('') + [['#e0a93a', 41], ['#d9544a', 45], ['#4a7fd9', 49]].map(([c, x]) => `<rect x="${x - 3}" y="31" width="3.4" height="9" fill="${c}" stroke="${O2}" stroke-width=".8"/>`).join('') +
+      `<g><path d="M24 12 Q32 8 40 12 V20 Q32 16 24 20 Z" fill="#fff8e0" ${S2}/><line x1="32" y1="10" x2="32" y2="18" stroke="${O2}" stroke-width="1"/>${mv('0 0;0 -3;0 0', 2.8)}</g>` + star4(14, 14, 1.2, 2) + star4(52, 12, 1.2, 2.6) + c2(12, 56, 3, '#62b350'),
   };
+  const POI_COLOR = { 'ほこら': '#ff9a6a', '古刹': '#ffc36a', '礼拝堂': '#bcd6ff', '古城': '#fff0a0', '古い遺跡': '#9fe8c0', '森の広場': '#a8f070', '花の庭園': '#ff9ec7', '星見台': '#a0b4ff', 'ふしぎな石像': '#7fe0c0', 'ふしぎな水晶': '#c9a8ff', '知の殿堂': '#ffd98a', '旅の門': '#8fb2ff', '癒しの泉': '#8fe8e0', '旅人の宿': '#ffb27a', '知恵の書庫': '#ffe08a' };
+  // まだ見つけていない名所: 光る謎の宝珠(周りを光の粒がまわる)
+  const UNKNOWN = () => df(`<radialGradient id="uo1" cx=".35" cy=".3"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#d4c2ff"/><stop offset="1" stop-color="#6a3fd0"/></radialGradient>`) + glow('ug', 32, 32, 31, '#b79bff', 0.8) +
+    `<g><animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="6s" repeatCount="indefinite"/><circle cx="32" cy="6" r="2.4" fill="#fff6c8"/><circle cx="58" cy="32" r="1.7" fill="#ffe08a"/><circle cx="8" cy="40" r="2" fill="#fff6c8"/><circle cx="46" cy="55" r="1.5" fill="#ffe08a"/></g>` +
+    `<circle cx="32" cy="32" r="16" fill="url(#uo1)" stroke="#3b1f7a" stroke-width="1.6"/><path d="M25.5 27 Q25.5 19.5 32 19.5 Q39 19.5 39 26 Q39 30.5 34 32.5 Q32 33.5 32 37.5" fill="none" stroke="#ffd24a" stroke-width="3.4" stroke-linecap="round"/><circle cx="32" cy="43.5" r="2.3" fill="#ffd24a"/><path d="M22 24 Q24 19 29 17" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.8" stroke-linecap="round"/>`;
   // ---- コイン類 ----
   const COIN = {
     coin: () => glow('cn1', 32, 32, 30, '#ffe066', 0.6) + circ(32, 32, 21, '#ffd24a') + `<circle cx="32" cy="32" r="15" fill="none" stroke="#d9a000" stroke-width="2.4"/>` + `<polygon points="${starPts(32, 32, 9, 4)}" fill="#fff0a0" stroke="#d9a000" stroke-width="1.5"/>` + arc('M18 24 Q22 16 30 14', '#fff', 2.4),
@@ -141,11 +206,14 @@ window.ART = (function () {
   return {
     item: (id, lv, px = 64) => svg(ITEMS[id][Math.min(3, Math.max(1, lv || 1)) - 1](), px),
     poi: (kind, px = 64) => svg((POI[kind] || POI['森の広場'])(), px),
+    unknown: (px = 56) => svg(UNKNOWN(), px),
+    poiColor: kind => POI_COLOR[kind] || '#ffd873',
+    poiKinds: () => Object.keys(POI),
     coin: (kind, px = 40) => svg(COIN[kind || 'coin'](), px),
     hero: (px = 56) => svg(HERO(), px),
     butterfly: BUTTERFLY,
     decorSvgs: DECOR.map(f => svg(f(), 64)),
     sheet: () => Object.keys(ITEMS).map(id => [1, 2, 3].map(l => svg(ITEMS[id][l - 1](), 72)).join('')).join('<br>') + '<br>' +
-      Object.keys(POI).map(k => svg(POI[k](), 72)).join('') + '<br>' + Object.keys(COIN).map(k => svg(COIN[k](), 72)).join('') + svg(HERO(), 72) + DECOR.map(f => svg(f(), 72)).join('') + BUTTERFLY(),
+      Object.keys(POI).map(k => svg(POI[k](), 72)).join('') + svg(UNKNOWN(), 72) + '<br>' + Object.keys(COIN).map(k => svg(COIN[k](), 72)).join('') + svg(HERO(), 72) + DECOR.map(f => svg(f(), 72)).join('') + BUTTERFLY(),
   };
 })();
