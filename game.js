@@ -28,7 +28,7 @@ const isNight = () => { const h = hourNow(); return h < 5 || h >= 19; };
 
 // ---- 保存データ ----
 const KEY = 'sanpo-quest';
-const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], regions: { pref: {}, city: {} }, titles: {}, ap: 300, adv: null, imports: [], importFp: [],
+const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], regions: { pref: {}, city: {} }, titles: {}, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [],
   stats: { morning: 0, night: 0, rain: 0, snow: 0, hot: 0, cold: 0, dayMax: 0, streak: 0, streakDay: '' } },
   JSON.parse(localStorage.getItem(KEY) || '{}'));
 save.coins = save.coins.filter(c => c.exp > Date.now());
@@ -1117,14 +1117,50 @@ async function importFile(file) {
 function renderAdvPanel() {
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
   $('adv-toggle').textContent = mode === 'adventure' ? '現実モードにもどる(GPSで歩く)' : '冒険モードにする';
+  $('awake').checked = !!save.awake; $('awake-st').textContent = !('wakeLock' in navigator) ? '(このブラウザは未対応)' : wakeLock ? '(今: 有効)' : save.awake ? '(画面を触ると有効になります)' : '';
   $('imp-hist').innerHTML = save.imports.map(h => `<li><b>${esc(h.name)}</b><small>${h.date} ・ ${esc(h.summary)}</small></li>`).join('');
 }
-$('adv-export').onclick = () => {          // このアプリが記録した足あとを、GPXファイルとして書き出す
-  if (!save.trail.length) return toast('まだ足あとの記録がありません');
-  const body = save.trail.map(p => `<trkpt lat="${p[0].toFixed(6)}" lon="${p[1].toFixed(6)}"/>`).join('');
-  const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Sanpo Quest" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Sanpo Quest</name><trkseg>${body}</trkseg></trk></gpx>`;
+$('adv-export').onclick = () => {          // このアプリの記録を、GPXファイルとして書き出す(時刻つきの記録があれば、時刻つき)
+  let body = '';
+  if (save.log.length) {
+    let seg = [], prev = null; const flush = () => { if (seg.length) body += `<trkseg>${seg.join('')}</trkseg>`; seg = []; };
+    for (const q of save.log) { if (prev && q[2] - prev[2] > 600000) flush(); seg.push(`<trkpt lat="${q[0].toFixed(6)}" lon="${q[1].toFixed(6)}"><time>${new Date(q[2]).toISOString()}</time></trkpt>`); prev = q; }
+    flush();
+  } else if (save.trail.length) body = `<trkseg>${save.trail.map(p => `<trkpt lat="${p[0].toFixed(6)}" lon="${p[1].toFixed(6)}"/>`).join('')}</trkseg>`;
+  if (!body) return toast('まだ記録がありません');
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Sanpo Quest" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Sanpo Quest</name>${body}</trk></gpx>`;
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([gpx], { type: 'application/gpx+xml' })); a.download = `sanpo-quest-${todayStr()}.gpx`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 };
+// ---- 画面をつけたままにする(Screen Wake Lock) ----
+let wakeLock = null;
+async function acquireWake() {
+  if (!save.awake || wakeLock || document.hidden || !('wakeLock' in navigator)) return;
+  try { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; renderAdvPanel(); }); } catch (e) { wakeLock = null; }
+  renderAdvPanel();
+}
+async function setAwake(on) {
+  save.awake = on; persist();
+  if (!on && wakeLock) { try { await wakeLock.release(); } catch (e) {} wakeLock = null; }
+  await acquireWake(); renderAdvPanel();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) acquireWake(); });
+addEventListener('pointerdown', () => acquireWake(), { once: true });          // 一部のブラウザは、画面を触ってから許可される
+$('awake').onchange = e => setAwake(e.target.checked);
+// ---- 他のアプリからの「共有」(GPXなど)を受け取って取り込む ----
+async function importShared() {
+  const m = /[?&]shared=([^&]*)/.exec(location.search); if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search.replace(/([?&])shared=[^&]*&?/, '$1').replace(/[?&]$/, '') + location.hash);
+  renderAdvPanel(); $('adv').hidden = false;
+  if (m[1] === 'err' || !('caches' in window)) return $('imp-status').textContent = '⚠️ 共有されたファイルを受け取れませんでした。🗺️のボタンから、ファイルを選んで取り込んでください';
+  const cache = await caches.open('shared-v1'), reqs = (await cache.keys()).sort((x, y) => x.url.localeCompare(y.url));
+  if (!reqs.length) return $('imp-status').textContent = 'ℹ️ 共有されたファイルが見つかりませんでした';
+  for (const rq of reqs) {
+    const res = await cache.match(rq), blob = await res.blob(), name = decodeURIComponent(res.headers.get('x-filename') || 'shared.gpx');
+    await cache.delete(rq); await importFile(new File([blob], name));
+  }
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+setTimeout(importShared, 2500);
 $('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
 $('adv-toggle').onclick = () => { setMode(mode === 'adventure' ? 'real' : 'adventure'); $('adv').hidden = true; };
@@ -1222,8 +1258,15 @@ $('btn-book').onclick = () => { bookFresh = true; renderBook(); $('book').hidden
 $('book-close').onclick = () => { $('book').hidden = true; };
 
 // ---- 位置更新 ----
+const LOG_MAX = 30000;
+function logPoint(lat, lng) {            // 現実のGPSの記録を、時刻つきで残す(GPXで書き出せる)。ゲームの速度制限とは関係なく、そのまま記録する
+  const now = Date.now(), l = save.log, q = l[l.length - 1];
+  if (q && dist({ lat: q[0], lng: q[1] }, { lat, lng }) < 5 && now - q[2] < 15000) return;
+  l.push([+lat.toFixed(6), +lng.toFixed(6), now]); if (l.length > LOG_MAX) l.splice(0, l.length - LOG_MAX);
+}
 function updatePosition(lat, lng, accuracy, virtual) {
   const ll = { lat, lng }; me = ll;
+  if (!virtual && !debug) logPoint(lat, lng);
   if (virtual) save.adv = { lat, lng };
   if (!target) {
     avatar = { lat, lng };
@@ -1263,11 +1306,9 @@ function startPreview(reason) {            // GPSが取れないときは冒険�
 }
 if (!navigator.geolocation) startPreview('位置情報に未対応');
 else {
-  navigator.geolocation.watchPosition(
-    p => { realPos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }; if (debug || mode === 'adventure') return; updatePosition(realPos.lat, realPos.lng, realPos.acc); },
-    err => startPreview('位置情報を取得できません(' + err.message + ')'),
-    { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
-  );
+  const onGps = p => { realPos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }; if (debug || mode === 'adventure') return; updatePosition(realPos.lat, realPos.lng, realPos.acc); };
+  navigator.geolocation.watchPosition(onGps, err => startPreview('位置情報を取得できません(' + err.message + ')'), { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) navigator.geolocation.getCurrentPosition(onGps, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }); });   // 画面に戻ったら位置を取り直す
   setTimeout(() => startPreview('位置情報の取得に時間がかかっています'), 8000);
 }
 save.coins.forEach(addCoinMarker);

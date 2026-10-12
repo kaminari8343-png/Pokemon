@@ -1,0 +1,30 @@
+{
+  "id": "./",
+  "name": "Sanpo Quest(散歩クエスト)",
+  "short_name": "Sanpo Quest",
+  "description": "歩いて街を冒険する散歩アプリ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1b1740",
+  "theme_color": "#1b1740",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "file",
+          "accept": ["application/gpx+xml", "application/xml", "text/xml", "application/json", "application/zip", "application/octet-stream", "text/csv", "text/plain", ".gpx", ".tcx", ".kml", ".json", ".geojson", ".zip", ".csv"]
+        }
+      ]
+    }
+  }
+}

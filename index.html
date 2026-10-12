@@ -4,10 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Sanpo Quest</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1b1740">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
 <div id="map"></div>
@@ -61,8 +64,10 @@
     <div id="adv-ap"></div>
     <p class="note">歩いた距離は 👣 として貯まります(10mで1)。冒険モードでは、現実の場所に関係なく、地図をタップした場所へ👣を使って歩いて行けます(10mで1)。霧・コイン・名所は進みますが、「歩いた距離」には数えません。</p>
     <button id="adv-toggle"></button>
+    <label class="awake"><input id="awake" type="checkbox"> 🔆 ゲーム中は画面をつけたままにする <small id="awake-st"></small></label>
     <h3>📥 GPSログの取り込み</h3>
     <p class="note">GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴(JSON・Takeout の ZIP)に対応。形式が分からないJSONでも、座標らしい値を探して読み取ります。歩いた道の霧が晴れ、通った県・市区町村、道すじ沿いの名所も記録され、距離が👣になります。速度の制限はなく、電車や車の移動も、記録のとおりに反映されます。</p>
+    <p class="note">💡 ホーム画面に「インストール」しておくと、GPSLoggerなどのアプリで、GPXを「共有」→「Sanpo Quest」を選ぶだけで取り込めます。</p>
     <label class="rangesel">取り込む期間 <select id="imp-range"><option value="0">すべて</option><option value="365">直近1年</option><option value="90">直近3か月</option><option value="30" selected>直近1か月</option><option value="7">直近1週間</option></select></label>
     <label class="filebtn">ファイルを選ぶ<input id="imp-file" type="file" multiple accept=".gpx,.tcx,.kml,.json,.geojson,.csv,.zip,application/json,application/zip,text/xml,text/csv"></label>
     <div id="imp-status"></div>
@@ -82,8 +87,8 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=18"></script>
-<script src="jpmap.js?v=18"></script>
-<script src="game.js?v=18"></script>
+<script src="art.js?v=19"></script>
+<script src="jpmap.js?v=19"></script>
+<script src="game.js?v=19"></script>
 </body>
 </html>

@@ -154,3 +154,4 @@ svg.jp text{font-size:8px}
 .rangesel{display:block;font-size:13px;margin-bottom:8px}.rangesel select{font:inherit;padding:4px 6px;border-radius:8px;border:1px solid #cdbb8a;background:#fff8e1}
 #imp-diag{width:100%;box-sizing:border-box;font-size:11px;border:1px solid #cdbb8a;border-radius:8px;background:#fff8e1;color:#3a2a10;padding:6px;margin-bottom:8px}
 #adv-export{margin-bottom:8px}
+.awake{display:block;font-size:13px;margin:6px 0 10px;line-height:1.5}.awake small{opacity:.7}.awake input{margin-right:6px;transform:scale(1.2)}
