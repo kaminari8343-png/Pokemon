@@ -210,22 +210,3 @@ svg.jp text{font-size:8px}
 .lite .clu::before{box-shadow:none}
 .tbtn{display:flex;gap:6px;margin-top:4px}.tbtn button{width:auto!important;padding:4px 10px!important;font-size:12px!important;background:#e6d9b8!important;color:#3a2a10!important;border:0;border-radius:8px}
 .tabs{flex-wrap:wrap}.tabs button{flex:1 0 30%;padding:7px 2px;font-size:13px}
-/* ---- 街づくり ---- */
-#citybar{position:fixed;left:0;right:0;bottom:0;z-index:1500;background:rgba(246,236,208,.97);border-top:3px solid #5b4326;padding:6px 8px calc(6px + env(safe-area-inset-bottom));color:#3a2a10}
-.cb-top{display:flex;justify-content:space-between;gap:8px;font-size:13px;line-height:1.3;min-height:34px}.cb-top small{display:block;opacity:.75;font-size:11px}
-#cb-coins{font-weight:800;white-space:nowrap}
-.cb-act{display:flex;gap:6px;margin:4px 0}.cb-act button{flex:1;border:0;border-radius:10px;padding:7px 2px;background:#5b4326;color:#fff;font:inherit;font-size:12px;cursor:pointer}#cb-collect{background:#2f7d4f}#cb-close{background:#b3402a}
-#cb-tools{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
-#cb-tools button{flex:0 0 auto;width:54px;border:2px solid #d9c9a0;border-radius:12px;background:#fff8e1;color:#3a2a10;padding:4px 0;display:flex;flex-direction:column;align-items:center;font:inherit;cursor:pointer}
-#cb-tools button span{font-size:24px;line-height:1.1}#cb-tools button small{font-size:10px;font-weight:700}
-#cb-tools button.on{border-color:#e08a00;background:#ffe9a8;box-shadow:0 0 0 2px #e08a00}#cb-tools button:disabled{opacity:.4}
-.citymode #btns,.citymode #hint,.citymode #realbar{display:none!important}
-#btns button{position:relative}#btns button.ready::after{content:"💰";position:absolute;top:-6px;right:-6px;font-size:16px;animation:bob .8s ease-in-out infinite alternate}
-.cpop{font-size:30px;animation:rise 1.3s ease-out forwards;pointer-events:none}
-.city-head{font-size:16px;margin-bottom:6px}.city-head small{background:#5b4326;color:#fff;border-radius:8px;padding:1px 8px;margin-left:4px}
-.tinybtn{width:auto!important;padding:2px 8px!important;border:0;border-radius:8px;background:#e6d9b8!important;color:#3a2a10!important}
-.city-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}.city-grid div{background:#fff8e1;border-radius:10px;padding:6px 2px;text-align:center}.city-grid small{display:block;font-size:10px;opacity:.7}.city-grid b{font-size:16px}
-.city-money{font-size:12px;margin-bottom:8px}
-.city-btns{display:grid;gap:6px;margin-bottom:8px}.city-btns button{padding:9px!important;font-size:13px!important;border:0;border-radius:10px;background:#5b4326!important;color:#fff!important}#city-collect{background:#2f7d4f!important}
-.dem-box{font-size:12px;margin-bottom:8px}.dem{display:flex;align-items:center;gap:6px;margin-top:4px}.dem span{width:56px}.dem div{flex:1;height:10px;background:#e6d9b8;border-radius:6px;overflow:hidden}.dem i{display:block;height:100%}
-.city-tips{font-size:12px;background:#fff3c4;border-radius:10px;padding:8px 10px}.city-tips ul{margin:4px 0 0 16px;padding:0}.city-tips li{margin-bottom:3px}
