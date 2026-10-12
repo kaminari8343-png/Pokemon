@@ -152,3 +152,5 @@ svg.jp text{font-size:8px}
 .flag{font-size:30px;line-height:1;filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));animation:bob .6s ease-in-out infinite alternate}
 #btns button#btn-adv.on{background:#8fd3ff}
 .rangesel{display:block;font-size:13px;margin-bottom:8px}.rangesel select{font:inherit;padding:4px 6px;border-radius:8px;border:1px solid #cdbb8a;background:#fff8e1}
+#imp-diag{width:100%;box-sizing:border-box;font-size:11px;border:1px solid #cdbb8a;border-radius:8px;background:#fff8e1;color:#3a2a10;padding:6px;margin-bottom:8px}
+#adv-export{margin-bottom:8px}

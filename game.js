@@ -887,6 +887,67 @@ function advTick() {
 // ---- GPSログの取り込み(GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴JSON) ----
 const IMP_MAX_JUMP = 150000;                // 取り込みに速度の制限はない(電車・車の移動もそのまま記録)。ただしデータの穴で150km以上飛ぶ区間は、線でつながない(飛行機など)
 const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+// 形式が分からない(または変更された)JSONから、座標らしい値を全部探す。"geo:35.68,139.76" / "35.68°, 139.76°" / latitudeE7 / lat,lng などを、ファイルの並び順に拾う
+function looseExtract(root) {
+  const pts = [];
+  const strC = s => { const m = /^\s*(?:geo:)?\s*(-?\d{1,3}(?:\.\d+)?)\s*°?\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)\s*°?/.exec(s); if (!m) return null; const la = +m[1], lo = +m[2]; return Math.abs(la) <= 90 && Math.abs(lo) <= 180 ? [la, lo] : null; };
+  const addC = (c, t) => { if (c) pts.push({ lat: c[0], lng: c[1], t: t != null && !isNaN(t) ? t : null }); };
+  const pd = v => v == null ? null : typeof v === 'number' ? v : Date.parse(v);
+  const PK = ['point', 'latLng', 'LatLng', 'latlng', 'placeLocation', 'location', 'start', 'end', 'position', 'coordinate'];
+  (function walk(n, st) {
+    if (Array.isArray(n)) { n.forEach(x => walk(x, st)); return; }
+    if (!n || typeof n !== 'object') return;
+    const sT = pd(n.startTime) ?? st;
+    let t = pd(n.time ?? n.timestamp ?? n.timestampMs); if (t != null && isNaN(t)) t = null;
+    if (t == null && n.durationMinutesOffsetFromStartTime != null && sT) t = sT + (+n.durationMinutesOffsetFromStartTime) * 60000;
+    const la = n.latitudeE7 != null ? n.latitudeE7 / 1e7 : n.latE7 != null ? n.latE7 / 1e7 : num(n.latitude ?? n.lat);
+    const lo = n.longitudeE7 != null ? n.longitudeE7 / 1e7 : n.lngE7 != null ? n.lngE7 / 1e7 : num(n.longitude ?? n.lng ?? n.lon ?? n.long);
+    if (la != null && lo != null && Math.abs(la) <= 90 && Math.abs(lo) <= 180) addC([la, lo], t ?? sT);
+    for (const k of Object.keys(n)) {
+      const v = n[k];
+      if (typeof v === 'string' && PK.includes(k)) addC(strC(v), k === 'end' ? (pd(n.endTime) ?? t) : k === 'start' ? sT : (t ?? sT));
+      else if (v && typeof v === 'object') walk(v, sT);
+    }
+  })(root, null);
+  return pts.length ? [pts] : [];
+}
+// 読み取れなかったとき用: ファイルの構造を短くまとめる(座標の数字はぼかす)
+function describeText(text) {
+  const t = text.trim(), L = [];
+  const mask = s => String(s).replace(/-?\d+\.\d{3,}/g, '#.###').slice(0, 220);
+  L.push(`文字数: ${t.length}`);
+  try {
+    if (t[0] === '{' || t[0] === '[') {
+      const j = JSON.parse(t);
+      const typ = v => Array.isArray(v) ? `配列(${v.length})` : v === null ? 'null' : typeof v;
+      L.push('先頭の型: ' + typ(j));
+      const keys = o => Object.keys(o).slice(0, 12).map(k => `${k}:${typ(o[k])}`).join(', ');
+      if (Array.isArray(j)) { L.push('配列の長さ: ' + j.length); if (j[0] && typeof j[0] === 'object') { L.push('要素[0]のキー: ' + keys(j[0])); for (const k of Object.keys(j[0]).slice(0, 8)) { const v = j[0][k]; const s = Array.isArray(v) ? v[0] : v; if (s && typeof s === 'object') L.push(`  ${k} の中: ${keys(s)}`); } } else L.push('要素[0]: ' + mask(JSON.stringify(j[0]))); }
+      else { L.push('キー: ' + keys(j)); for (const k of Object.keys(j).slice(0, 6)) { const v = j[k], s = Array.isArray(v) ? v[0] : v; if (s && typeof s === 'object') L.push(`  ${k} の中: ${keys(s)}`); } }
+    } else L.push('形式: ' + (t[0] === '<' ? 'XML' : 'テキスト'));
+  } catch (e) { L.push('JSONとして読めません'); }
+  L.push('冒頭: ' + mask(t.slice(0, 200)));
+  return L.join('\n');
+}
+// ZIP(Googleデータのダウンロード=Takeoutなど)の中身を取り出す
+async function readZipEntries(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), dec = new TextDecoder();
+  let eocd = -1; for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('ZIPとして読めません');
+  const cnt = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true); const files = [];
+  for (let k = 0; k < cnt && dv.getUint32(p, true) === 0x02014b50; k++) {
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), usize = dv.getUint32(p + 24, true), nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    files.push({ name: dec.decode(u8.subarray(p + 46, p + 46 + nl)), method, csize, usize, off }); p += 46 + nl + el + cl;
+  }
+  return files;
+}
+async function zipEntryText(buf, f) {
+  const dv = new DataView(buf), start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = buf.slice(start, start + f.csize);
+  if (f.method === 0) return new TextDecoder().decode(data);
+  if (f.method !== 8) throw new Error('未対応のZIP圧縮方式');
+  if (typeof DecompressionStream === 'undefined') throw new Error('このブラウザはZIPの展開に未対応です。ZIPを解凍して、中のJSONを選んでください');
+  return await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+}
 function parseTracks(text) {
   const t = text.trim(), out = [];
   const pt = (lat, lng, tm) => (lat != null && lng != null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) ? { lat, lng, t: tm && !isNaN(tm) ? tm : null } : null;
@@ -945,7 +1006,9 @@ function parseTracks(text) {
     if (li < 0 || gi < 0) throw new Error('緯度・経度の列が見つかりません');
     out.push(lines.slice(1).map(l => { const c = l.split(','); return pt(num(c[li]), num(c[gi]), ti >= 0 ? Date.parse(c[ti]) : null); }).filter(Boolean));
   }
-  return out.filter(tr => tr.length >= 1);
+  const found = out.filter(tr => tr.length >= 1);
+  if (!found.length && (t[0] === '{' || t[0] === '[')) { try { return looseExtract(JSON.parse(t)); } catch (e) { /* 読めない */ } }
+  return found;
 }
 // 記録された道すじを、一定の間隔(20m、長い区間は50m)の点にする。取り込みでは速度の制限はなく、記録のとおりに反映する
 function buildSamples(tracks) {
@@ -977,8 +1040,27 @@ const trackFp = tr => { const a = tr[0], b = tr[tr.length - 1]; return hashStr(`
 async function importFile(file) {
   const log = msg => { $('imp-status').textContent = msg; };
   if (file.size > 200e6) return log(`⚠️ ${file.name}: ファイルが大きすぎます(200MB超)。期間を絞って書き出し直してください`);
+  $('imp-diag').hidden = true;
   log(`${file.name} を読み込み中…`);
-  let tracks; try { tracks = parseTracks(await file.text()); } catch (e) { return log(`⚠️ ${file.name}: ${e.message || '読み取れませんでした'}`); }
+  let tracks = [], firstErr = null, diagText = '';
+  try {
+    if (/\.zip$/i.test(file.name)) {
+      if (file.size > 600e6) return log(`⚠️ ${file.name}: ZIPが大きすぎます(600MB超)。位置情報だけを選んで書き出し直してください`);
+      const buf = await file.arrayBuffer(), entries = (await readZipEntries(buf)).filter(f => /\.(json|gpx|kml|tcx|csv)$/i.test(f.name) && f.usize < 300e6);
+      for (let i = 0; i < entries.length; i++) {
+        log(`ZIPの中を読み込み中… ${i + 1}/${entries.length}  ${entries[i].name.split('/').pop()}`); await sleep(0);
+        try { const tx = await zipEntryText(buf, entries[i]), tr = parseTracks(tx); tracks.push(...tr); if (!tr.length && !diagText && /location|timeline|ロケーション|タイムライン|records/i.test(entries[i].name)) diagText = entries[i].name + '\n' + describeText(tx); }
+        catch (e) { firstErr = firstErr || e; }
+      }
+      if (!entries.length) return log(`⚠️ ${file.name}: ZIPの中に位置情報のファイル(JSON・GPXなど)が見つかりませんでした`);
+    } else {
+      const tx = await file.text();
+      try { tracks = parseTracks(tx); } catch (e) { firstErr = e; }
+      if (!tracks.length) diagText = describeText(tx);
+    }
+  } catch (e) { return log(`⚠️ ${file.name}: ${e.message || '読み取れませんでした'}`); }
+  if (!tracks.length && diagText) { $('imp-diag').value = diagText; $('imp-diag').hidden = false; }
+  if (!tracks.length && firstErr) return log(`⚠️ ${file.name}: ${firstErr.message || '読み取れませんでした'}`);
   const days = +$('imp-range').value;                                   // 期間の指定(0=全期間)
   if (days) { const cut = Date.now() - days * 864e5; tracks = tracks.map(tr => tr.filter(p => !p.t || p.t >= cut)).filter(tr => tr.length); }
   if (!tracks.length) return log(`⚠️ ${file.name}: 道すじが見つかりませんでした(期間の指定が合っているか確認してください)`);
@@ -1037,6 +1119,12 @@ function renderAdvPanel() {
   $('adv-toggle').textContent = mode === 'adventure' ? '現実モードにもどる(GPSで歩く)' : '冒険モードにする';
   $('imp-hist').innerHTML = save.imports.map(h => `<li><b>${esc(h.name)}</b><small>${h.date} ・ ${esc(h.summary)}</small></li>`).join('');
 }
+$('adv-export').onclick = () => {          // このアプリが記録した足あとを、GPXファイルとして書き出す
+  if (!save.trail.length) return toast('まだ足あとの記録がありません');
+  const body = save.trail.map(p => `<trkpt lat="${p[0].toFixed(6)}" lon="${p[1].toFixed(6)}"/>`).join('');
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Sanpo Quest" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Sanpo Quest</name><trkseg>${body}</trkseg></trk></gpx>`;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([gpx], { type: 'application/gpx+xml' })); a.download = `sanpo-quest-${todayStr()}.gpx`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
 $('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
 $('adv-toggle').onclick = () => { setMode(mode === 'adventure' ? 'real' : 'adventure'); $('adv').hidden = true; };
