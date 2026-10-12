@@ -198,3 +198,4 @@ svg.jp text{font-size:8px}
 .sortbar{background:#fff3c4;border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px;display:flex;align-items:center;gap:8px}.sortbar button{width:auto!important;padding:5px 10px!important;margin-left:auto}
 
 .lite #fx{display:none}.lite .pin *,.lite .pin{animation:none!important}.lite .pin .c,.lite .pin .sp,.lite .ghost .sp{filter:none!important}.lite .obj.found .base::before{display:none}
+#btns button.spin{animation:rot 1s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}

@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 <div id="map"></div>
@@ -34,6 +34,7 @@
   <button id="btn-view" title="見下ろし/斜め">🧭</button>
   <button id="btn-build" title="つくる">🔨</button>
   <button id="btn-book" title="冒険の書">📖</button>
+  <button id="btn-refresh" title="更新(長押しでアプリを最新版に)">🔄</button>
   <button id="btn-locate" title="現在地へ">📍</button>
   <button id="btn-debug" title="テスト移動">🧪</button>
 </div>
@@ -67,6 +68,7 @@
     <button id="adv-toggle"></button>
     <label class="awake"><input id="awake" type="checkbox"> 🔆 ゲーム中は画面をつけたままにする <small id="awake-st"></small></label>
     <label class="awake"><input id="lite" type="checkbox"> ⚡ かるいモード(重いとき) <small>飾り・アニメ・3D建物をやめて軽くします</small></label>
+    <button id="app-update" class="sub2">🔄 アプリを最新版に更新する</button>
     <h3>⚙️ 👣の設定</h3>
     <p class="note">冒険モードで使う👣を、自分で付与できます(個人アプリ用の設定)。</p>
     <div class="apset"><input id="ap-amount" type="number" inputmode="numeric" min="0" max="10000000" step="100" value="1000"><span>👣</span></div>
@@ -102,8 +104,8 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=29"></script>
-<script src="jpmap.js?v=29"></script>
-<script src="game.js?v=29"></script>
+<script src="art.js?v=30"></script>
+<script src="jpmap.js?v=30"></script>
+<script src="game.js?v=30"></script>
 </body>
 </html>

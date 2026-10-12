@@ -437,7 +437,7 @@ async function fetchPois(center) {
     poiCenter = center; poiLoadedAt = Date.now(); poiFailCount = 0; poiMsg = null;
   } catch (e) {
     poiFailCount++; poiRetryAt = Date.now() + Math.min(60, 6 * 2 ** poiFailCount) * 1000;          // 失敗したら、少しずつ間をあけて自動でやり直す
-    if (!pois.size) poiMsg = '⚠️ 名所を読み込めません。自動でやり直します…';
+    if (!pois.size) poiMsg = '⚠️ 名所を読み込めません。自動でやり直します(🔄でいますぐ更新)';
   }
   poiFetching = false; updateHint();
 }
@@ -1418,6 +1418,33 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 setTimeout(importShared, 2500);
 $('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
+// 🔄 更新: 名所・地域・天気をいますぐ取り直す(長押し / パネルのボタンで、アプリ自体を最新版に入れ替え)
+async function refreshData() {
+  const b = $('btn-refresh'); if (b.classList.contains('spin')) return;
+  if (!me) return toast('現在地を取得してから更新できます');
+  b.classList.add('spin'); toast('🔄 名所・地域・天気を取り直しています…');
+  try {
+    poiRetryAt = 0; poiFailCount = 0; poiMsg = null;
+    for (const k of Object.keys(poiCache.at)) delete poiCache.at[k];
+    poiCenter = null; regionFailAt = 0;
+    fetchWeather(); processRegions();
+    const before = pois.size, t0 = poiLoadedAt;
+    if (!poiFetching) await fetchPois(me); else while (poiFetching) await sleep(500);
+    toast(poiLoadedAt > t0 ? `✅ 更新しました(名所 ${pois.size}件${pois.size > before ? '・新しく' + (pois.size - before) + '件' : ''})` : '⚠️ 名所を読み込めませんでした。通信状態を見て、もう一度押してください');
+  } catch (e) { toast('更新に失敗しました。もう一度お試しください'); }
+  b.classList.remove('spin');
+}
+function updateApp() {
+  if (!confirm('アプリを最新版に更新します(記録は消えません)。よろしいですか?')) return;
+  persist();
+  const go = () => location.replace(location.pathname + '?r=' + Date.now());
+  (async () => { try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.update(); } catch (e) {} go(); })();
+}
+{ let pt = 0, long = false;
+  $('btn-refresh').onclick = () => { if (long) { long = false; return; } refreshData(); };
+  $('btn-refresh').addEventListener('pointerdown', () => { long = false; pt = setTimeout(() => { long = true; updateApp(); }, 900); });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('btn-refresh').addEventListener(ev, () => clearTimeout(pt)); }
+$('app-update').onclick = updateApp;
 $('lite').onchange = () => { save.lite = $('lite').checked; fpsDone = true; applyLite(); persist(); };
 $('gate-add').onclick = startPlacingGate;
 const setAp = (n, add) => {
