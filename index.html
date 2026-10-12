@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=26">
+<link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
 <div id="map"></div>
@@ -66,6 +66,11 @@
     <p class="note">歩いた距離は 👣 として貯まります(10mで1)。冒険モードでは、現実の場所に関係なく、地図をタップした場所へ👣を使って歩いて行けます(10mで1)。霧・コイン・名所は進みますが、「歩いた距離」には数えません。</p>
     <button id="adv-toggle"></button>
     <label class="awake"><input id="awake" type="checkbox"> 🔆 ゲーム中は画面をつけたままにする <small id="awake-st"></small></label>
+    <h3>⚙️ 👣の設定</h3>
+    <p class="note">冒険モードで使う👣を、自分で付与できます(個人アプリ用の設定)。</p>
+    <div class="apset"><input id="ap-amount" type="number" inputmode="numeric" min="0" max="10000000" step="100" value="1000"><span>👣</span></div>
+    <div class="apset"><button id="ap-add" class="sub2">加算する</button><button id="ap-set" class="sub2">この数にする</button></div>
+    <div class="apset"><button class="sub2 apq" data-n="1000">+1,000</button><button class="sub2 apq" data-n="10000">+10,000</button><button class="sub2 apq" data-n="100000">+100,000</button></div>
     <h3>🌀 ワープゲート</h3>
     <p class="note">行ったことのある場所(霧が晴れた所)にゲートを置くと、冒険モードで、どこからでも一瞬でそこへ飛べます。地図のゲートをタップしてもOK。</p>
     <ul id="gate-list" class="gates"></ul>
@@ -96,8 +101,8 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=26"></script>
-<script src="jpmap.js?v=26"></script>
-<script src="game.js?v=26"></script>
+<script src="art.js?v=27"></script>
+<script src="jpmap.js?v=27"></script>
+<script src="game.js?v=27"></script>
 </body>
 </html>

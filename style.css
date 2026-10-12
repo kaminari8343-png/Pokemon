@@ -194,3 +194,4 @@ svg.jp text{font-size:8px}
 .warpflash{position:fixed;inset:0;z-index:3000;pointer-events:none;background:radial-gradient(circle,#fff,#9be7ff 40%,#6a4bd8);animation:wf .9s ease-out forwards}
 @keyframes wf{0%{opacity:.95}100%{opacity:0}}
 .gates{list-style:none;padding:0;margin:0 0 8px}.gates li{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}.gates li b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gates li button{width:auto!important;padding:6px 12px!important}
+.apset{display:flex;gap:8px;align-items:center;margin-bottom:8px}.apset input{flex:1;padding:9px;border-radius:10px;border:1px solid #b9a77f;font:inherit;background:#fffaf0;color:#3a2a10}.apset button{flex:1}

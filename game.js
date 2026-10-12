@@ -1380,6 +1380,14 @@ setTimeout(importShared, 2500);
 $('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
 $('gate-add').onclick = startPlacingGate;
+const setAp = (n, add) => {
+  if (!isFinite(n) || n < 0) return toast('0以上の数を入れてください');
+  save.ap = Math.min(1e7, Math.round(add ? save.ap + n : n)); persist(); renderAdvPanel(); updateHud();
+  toast(`👣 ${add ? '+' + Math.round(n).toLocaleString() + ' → ' : 'を '}${Math.floor(save.ap).toLocaleString()}`);
+};
+$('ap-add').onclick = () => setAp(parseFloat($('ap-amount').value), true);
+$('ap-set').onclick = () => setAp(parseFloat($('ap-amount').value), false);
+document.querySelectorAll('.apq').forEach(b => b.onclick = () => setAp(+b.dataset.n, true));
 $('adv-toggle').onclick = () => { if (mode === 'adventure') returnToReal(); else { autoAdv = false; setMode('adventure'); } $('adv').hidden = true; };
 $('real-go').onclick = returnToReal;
 $('imp-file').onchange = async e => {
