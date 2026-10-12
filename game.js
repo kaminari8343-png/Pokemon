@@ -915,11 +915,28 @@ function parseTracks(text) {
       const locs = Array.isArray(j) ? j : j.locations;                                                                    // Googleの位置履歴(Records.json)
       if (locs) out.push(locs.map(l => pt(l.latitudeE7 != null ? l.latitudeE7 / 1e7 : num(l.latitude ?? l.lat), l.longitudeE7 != null ? l.longitudeE7 / 1e7 : num(l.longitude ?? l.lng ?? l.lon),
         l.timestamp ? Date.parse(l.timestamp) : l.timestampMs ? +l.timestampMs : null)).filter(Boolean));
-      for (const s of j.semanticSegments || []) if (s.timelinePath)                                                        // Googleマップのタイムライン(端末の書き出し)
-        out.push(s.timelinePath.map(p => { const m = /(-?\d+\.?\d*)\s*°?\s*,\s*(-?\d+\.?\d*)/.exec(String(p.point || '').replace('geo:', '')); return m ? pt(+m[1], +m[2], Date.parse(p.time)) : null; }).filter(Boolean));
+      // Googleマップのタイムライン(端末の書き出し): 座標は "35.68°, 139.76°" または "geo:35.68,139.76"
+      const ll = v => { const m = /(-?\d+\.?\d*)\s*°?\s*,\s*(-?\d+\.?\d*)/.exec(String(v || '').replace('geo:', '')); return m ? [+m[1], +m[2]] : null; };
+      const llPt = (v, tm) => { const c = ll(v); return c ? pt(c[0], c[1], tm) : null; };
+      for (const s of j.semanticSegments || []) {
+        const t0 = Date.parse(s.startTime), t1 = Date.parse(s.endTime);
+        if (s.timelinePath && s.timelinePath.length) out.push(s.timelinePath.map(p => llPt(p.point, Date.parse(p.time))).filter(Boolean));       // 道すじ
+        else if (s.activity) out.push([llPt(s.activity.start?.latLng, t0), llPt(s.activity.end?.latLng, t1)].filter(Boolean));                  // 移動(始点→終点)
+        if (s.visit) { const v = llPt(s.visit.topCandidate?.placeLocation?.latLng, t0); if (v) out.push([v]); }                                   // 立ち寄った場所
+      }
+      const raw = (j.rawSignals || []).map(r => r.position && llPt(r.position.LatLng, Date.parse(r.position.timestamp))).filter(Boolean);        // 生のGPS点
+      if (raw.length) out.push(raw);
+      // 古い形式(Takeoutの「Semantic Location History」)
+      const e7 = (o, tm) => o && o.latitudeE7 != null ? pt(o.latitudeE7 / 1e7, o.longitudeE7 / 1e7, tm) : null;
       for (const o of j.timelineObjects || []) {
-        const w = o.activitySegment?.simplifiedRawPath?.points || o.activitySegment?.waypointPath?.waypoints;
-        if (w) out.push(w.map(p => pt(p.latE7 != null ? p.latE7 / 1e7 : null, p.lngE7 != null ? p.lngE7 / 1e7 : null, p.timestamp ? Date.parse(p.timestamp) : null)).filter(Boolean));
+        const as = o.activitySegment, pv = o.placeVisit;
+        if (as) {
+          const w = as.simplifiedRawPath?.points || as.waypointPath?.waypoints;
+          const t0 = Date.parse(as.duration?.startTimestamp), t1 = Date.parse(as.duration?.endTimestamp);
+          if (w && w.length) out.push(w.map(p => pt(p.latE7 != null ? p.latE7 / 1e7 : null, p.lngE7 != null ? p.lngE7 / 1e7 : null, p.timestamp ? Date.parse(p.timestamp) : null)).filter(Boolean));
+          else out.push([e7(as.startLocation, t0), e7(as.endLocation, t1)].filter(Boolean));
+        }
+        if (pv) { const v = e7(pv.location, Date.parse(pv.duration?.startTimestamp)); if (v) out.push([v]); }
       }
     }
   } else {
@@ -928,7 +945,7 @@ function parseTracks(text) {
     if (li < 0 || gi < 0) throw new Error('緯度・経度の列が見つかりません');
     out.push(lines.slice(1).map(l => { const c = l.split(','); return pt(num(c[li]), num(c[gi]), ti >= 0 ? Date.parse(c[ti]) : null); }).filter(Boolean));
   }
-  return out.filter(tr => tr.length > 1);
+  return out.filter(tr => tr.length >= 1);
 }
 // 記録された道すじを、一定の間隔(20m、長い区間は50m)の点にする。取り込みでは速度の制限はなく、記録のとおりに反映する
 function buildSamples(tracks) {
@@ -954,16 +971,22 @@ async function overpassPost(q) {
   for (const url of OVERPASS) { try { const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q) }); if (r.ok) return await r.json(); } catch (e) { /* 次のサーバーへ */ } }
   throw new Error('overpass');
 }
+const fpSet = new Set(save.importFp);          // 取り込み済みの道すじ(1本ずつ。期間を変えて入れ直しても二重に数えない)
+const hashStr = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i); return (h >>> 0).toString(36); };
+const trackFp = tr => { const a = tr[0], b = tr[tr.length - 1]; return hashStr(`${tr.length}|${a.t || ''}|${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.t || ''}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}`); };
 async function importFile(file) {
   const log = msg => { $('imp-status').textContent = msg; };
+  if (file.size > 200e6) return log(`⚠️ ${file.name}: ファイルが大きすぎます(200MB超)。期間を絞って書き出し直してください`);
   log(`${file.name} を読み込み中…`);
   let tracks; try { tracks = parseTracks(await file.text()); } catch (e) { return log(`⚠️ ${file.name}: ${e.message || '読み取れませんでした'}`); }
-  if (!tracks.length) return log(`⚠️ ${file.name}: 道すじが見つかりませんでした`);
-  const r = buildSamples(tracks);
+  const days = +$('imp-range').value;                                   // 期間の指定(0=全期間)
+  if (days) { const cut = Date.now() - days * 864e5; tracks = tracks.map(tr => tr.filter(p => !p.t || p.t >= cut)).filter(tr => tr.length); }
+  if (!tracks.length) return log(`⚠️ ${file.name}: 道すじが見つかりませんでした(期間の指定が合っているか確認してください)`);
+  const fresh = tracks.filter(tr => !fpSet.has(trackFp(tr)));
+  if (!fresh.length) return log(`ℹ️ ${file.name} は取り込み済みです`);
+  const r = buildSamples(fresh);
   if (r.samples.length < 2 || r.total < 50) return log(`⚠️ ${file.name}: 道すじが短すぎるため取り込めません`);
-  const s0 = r.samples[0], fp = `${r.samples.length}|${s0.lat.toFixed(4)},${s0.lng.toFixed(4)}|${Math.round(r.total)}`;
-  if (save.importFp.includes(fp)) return log(`ℹ️ ${file.name} は取り込み済みです`);
-  save.importFp.push(fp);
+  fresh.forEach(tr => fpSet.add(trackFp(tr))); save.importFp = [...fpSet];
   // 1. 霧・足あと・距離・👣
   const cellsBefore = explored.size;
   for (let i = 0; i < r.samples.length; i++) {

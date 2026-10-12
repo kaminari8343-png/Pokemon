@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 <div id="map"></div>
@@ -63,6 +63,7 @@
     <button id="adv-toggle"></button>
     <h3>📥 GPSログの取り込み</h3>
     <p class="note">GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴(JSON)に対応。歩いた道の霧が晴れ、通った県・市区町村、道すじ沿いの名所も記録され、距離が👣になります。速度の制限はなく、電車や車の移動も、記録のとおりに反映されます。</p>
+    <label class="rangesel">取り込む期間 <select id="imp-range"><option value="0">すべて</option><option value="365">直近1年</option><option value="90">直近3か月</option><option value="30" selected>直近1か月</option><option value="7">直近1週間</option></select></label>
     <label class="filebtn">ファイルを選ぶ<input id="imp-file" type="file" multiple accept=".gpx,.tcx,.kml,.json,.geojson,.csv,application/json,text/xml,text/csv"></label>
     <div id="imp-status"></div>
     <ul id="imp-hist"></ul>
@@ -79,8 +80,8 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=16"></script>
-<script src="jpmap.js?v=16"></script>
-<script src="game.js?v=16"></script>
+<script src="art.js?v=17"></script>
+<script src="jpmap.js?v=17"></script>
+<script src="game.js?v=17"></script>
 </body>
 </html>
