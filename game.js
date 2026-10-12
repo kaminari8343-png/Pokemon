@@ -1777,7 +1777,7 @@ save.built.forEach(o => addBuiltMarker(o, false));
 reclusterBuilt(); map.once('load', () => { reclusterBuilt(); drawRoads(); });
 
 // ---- ワープゲート: 行ったことのある場所(霧が晴れた場所)に置くと、冒険モードでいつでもそこへ飛べる ----
-const GATE_COST = 30, MAX_GATES = 12;
+const GATE_COST = 30, MAX_GATES = 100;
 save.gates = save.gates || [];
 const gateMarkers = new Map();
 let placingGate = false;
