@@ -876,17 +876,49 @@ function stopAdv() {
   if (advFlag) { advFlag.remove(); advFlag = null; }
   persist();
 }
+let autoAdv = false, ghost = null;           // autoAdv: GPSが取れず、自動で冒険モードで始めた
+function snapCamera() {                      // キャラとカメラを、いまの位置へ一瞬で合わせる
+  if (!target) return;
+  avatar = { lat: target.lat, lng: target.lng }; if (meMarker) meMarker.setLngLat([avatar.lng, avatar.lat]);
+  map.jumpTo({ center: [avatar.lng, avatar.lat] });
+}
+function updateRealGhost() {                 // 冒険中: 現実のあなたの場所と、そこまでの距離・方角を示す
+  const bar = $('realbar');
+  if (mode !== 'adventure') { if (ghost) { ghost.remove(); ghost = null; } bar.hidden = true; return; }
+  bar.hidden = false;
+  if (!realPos) { $('real-text').textContent = '現実の現在地を取得中…'; return; }
+  const d = me ? dist(me, realPos) : 0;
+  $('real-text').textContent = d < 30 ? '現実の現在地のすぐ近くです' : `現実のあなたは ${fmt(d)} ${DIRS[Math.round(bearing(me, realPos) / 45) % 8]}の方角`;
+  if (!ghost) ghost = addPin(realPos, 'ghostpin', `<div class="ghost"><span class="sp">${ART.hero(44)}</span><b>現実の<br>あなた</b></div>`, () => returnToReal());
+  else ghost.setLngLat([realPos.lng, realPos.lat]);
+}
 function setMode(m) {
-  if (m === mode) return; mode = m; stopAdv(); last = null;
+  if (m === mode) return; mode = m; stopAdv(); last = null; follow = true;
   $('btn-adv').classList.toggle('on', mode === 'adventure');
-  if (mode === 'adventure') { const p = save.adv || realPos || me || START; updatePosition(p.lat, p.lng, 0, true); toast(`🗺️ 冒険モード\n地図をタップすると、👣を使ってそこへ歩いて行きます(10mで👣1)`); }
-  else if (realPos) { updatePosition(realPos.lat, realPos.lng, realPos.acc); toast('現実モードにもどりました'); }
-  renderAdvPanel();
+  if (mode === 'adventure') {
+    const p = save.adv || realPos || me || START; updatePosition(p.lat, p.lng, 0, true); snapCamera();
+    toast(`🗺️ 冒険モード\n地図をタップすると、👣を使ってそこへ歩いて行きます(10mで👣1)\n現実の場所へは、いつでも画面下のバーから戻れます`);
+  } else if (realPos) { updatePosition(realPos.lat, realPos.lng, realPos.acc); snapCamera(); toast('現実の現在地にもどりました'); }
+  else toast('現実の現在地を取得しています…');
+  updateRealGhost(); renderAdvPanel();
+}
+function returnToReal() {                    // 現実の現在地に合わせる(どれだけ離れていても)。分かっている位置ですぐ合わせてから、最新の位置に取り直す
+  const refresh = cb => navigator.geolocation && navigator.geolocation.getCurrentPosition(onGps, cb || (() => {}), { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+  if (realPos) { setMode('real'); refresh(); return; }
+  if (!navigator.geolocation) return toast('現実の現在地を取得できません(位置情報に未対応)');
+  $('real-text').textContent = '現実の現在地を取得中…';
+  navigator.geolocation.getCurrentPosition(p => { onGps(p); setMode('real'); }, () => toast('現実の現在地を取得できません。位置情報の許可を確認してください'), { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+}
+function onGps(p) {
+  realPos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
+  if (mode === 'adventure') { if (autoAdv) { autoAdv = false; setMode('real'); } else updateRealGhost(); return; }   // 自動で冒険モードにした場合は、GPSが取れたら現実モードへ
+  if (debug) return;
+  updatePosition(realPos.lat, realPos.lng, realPos.acc);
 }
 function advGo(ll) {
   if (mode !== 'adventure') return;
   if (save.ap < 1) return toast('👣が足りません。実際に歩くか、GPSログを取り込んで貯めよう');
-  advDest = ll;
+  advDest = ll; follow = true;
   if (advFlag) advFlag.remove();
   advFlag = addPin(ll, '', '<div class="flag">🚩</div>');
   if (!advTimer) advTimer = setInterval(advTick, 200);
@@ -898,6 +930,7 @@ function advTick() {
   const f = d > 0 ? step / d : 1;
   save.ap -= cost;
   updatePosition(me.lat + (advDest.lat - me.lat) * f, me.lng + (advDest.lng - me.lng) * f, 0, true);
+  updateRealGhost();
   if (step >= d - 0.01) stopAdv();
 }
 
@@ -1214,7 +1247,8 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 setTimeout(importShared, 2500);
 $('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
-$('adv-toggle').onclick = () => { setMode(mode === 'adventure' ? 'real' : 'adventure'); $('adv').hidden = true; };
+$('adv-toggle').onclick = () => { if (mode === 'adventure') returnToReal(); else { autoAdv = false; setMode('adventure'); } $('adv').hidden = true; };
+$('real-go').onclick = returnToReal;
 $('imp-file').onchange = async e => {
   const files = [...e.target.files]; e.target.value = '';
   if (!files.length) return;
@@ -1362,12 +1396,11 @@ function updatePosition(lat, lng, accuracy, virtual) {
 // ---- GPS (取れないときは東京駅からプレビュー) ----
 function startPreview(reason) {            // GPSが取れないときは冒険モードで始める(👣貯金で、地図をタップして歩ける)
   if (me) return;
-  setMode('adventure');
+  autoAdv = true; setMode('adventure');
   $('status').textContent = reason + ' → 冒険モードで開始 👣' + Math.floor(save.ap);
 }
 if (!navigator.geolocation) startPreview('位置情報に未対応');
 else {
-  const onGps = p => { realPos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }; if (debug || mode === 'adventure') return; updatePosition(realPos.lat, realPos.lng, realPos.acc); };
   navigator.geolocation.watchPosition(onGps, err => startPreview('位置情報を取得できません(' + err.message + ')'), { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) navigator.geolocation.getCurrentPosition(onGps, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }); });   // 画面に戻ったら位置を取り直す
   setTimeout(() => startPreview('位置情報の取得に時間がかかっています'), 8000);
