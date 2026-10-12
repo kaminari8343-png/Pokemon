@@ -35,12 +35,13 @@ const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0
   JSON.parse(localStorage.getItem(KEY) || '{}'));
 save.coins = save.coins.filter(c => c.exp > Date.now());
 if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
-const explored = new Set(), expI = [], expJ = [];
+const explored = new Set(), expI = [], expJ = [], expNum = new Set();      // expNum: 数値のキー(霧の描画を速くするための索引)
+const numKey = (i, j) => i * 2097152 + j;
 let expVer = 0;
 function markCell(i, j) {
   const k = i + ',' + j;
   if (explored.has(k)) return false;
-  explored.add(k); expI.push(i); expJ.push(j); expVer++; return true;
+  explored.add(k); expNum.add(numKey(i, j)); expI.push(i); expJ.push(j); expVer++; return true;
 }
 save.cells.forEach(k => { const [i, j] = k.split(',').map(Number); markCell(i, j); });
 function persist() { save.cells = [...explored]; try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} }
@@ -146,11 +147,11 @@ function makeTexture(id) {
 map.on('styleimagemissing', e => { if (e.id.startsWith('tex-') && !map.hasImage(e.id)) makeTexture(e.id); });
 let waterAt = 0;
 function animWater(t) {   // 水面の波をゆっくり流す
-  if (!mapReady || t - waterAt < 140) return; waterAt = t;
+  if (!mapReady || isLite() || t - waterAt < 450) return; waterAt = t;
   try { map.setPaintProperty('water-wave-a', 'fill-translate', [(t / 60) % 32, (t / 130) % 32]); map.setPaintProperty('water-wave-b', 'fill-translate', [-(t / 85) % 32, (t / 100) % 32]); } catch (e) {}
 }
 function setSrc(id, data) { try { const s = map.getSource(id); if (s) s.setData(data); } catch (e) {} }
-map.on('load', () => { mapReady = true; drawTrail(); showPlaceCircle(); });
+map.on('load', () => { mapReady = true; if (isLite()) applyLite(); drawTrail(); showPlaceCircle(); });
 // ベクター地図が読み込めないときは、簡易な画像の地図に切り替える
 setTimeout(() => {
   try {
@@ -175,8 +176,9 @@ const dLat = CELL / 111320;
 const dLng = lat => CELL / (111320 * Math.cos(lat * RAD));
 const fog = $('fog'), fctxFog = fog.getContext('2d'), fx = $('fx'), fctx = fx.getContext('2d');
 let dpr = 1, cssW = 0, cssH = 0, lastSig = '';
+const isLite = () => !!save.lite;
 function resize() {
-  dpr = devicePixelRatio || 1; cssW = innerWidth; cssH = innerHeight;
+  dpr = Math.min(devicePixelRatio || 1, isLite() ? 1 : 1.5); cssW = innerWidth; cssH = innerHeight;
   for (const c of [fog, fx]) { c.width = cssW * dpr; c.height = cssH * dpr; }
   lastSig = '';
 }
@@ -205,14 +207,19 @@ function drawFog() {
   const grad = g.createLinearGradient(0, 0, fog.width, fog.height); grad.addColorStop(0, '#1d2a5c'); grad.addColorStop(1, '#3a2263');
   g.globalAlpha = 0.86; g.fillStyle = grad; g.fillRect(0, 0, fog.width, fog.height);
   g.globalAlpha = 1; g.globalCompositeOperation = 'destination-out';
-  const latSpan = BOX / 111320, lngSpan = BOX / (111320 * Math.cos(c.lat * RAD));
-  for (let k = 0; k < expI.length; k++) {
-    const lat = (expI[k] + 0.5) * dLat; if (Math.abs(lat - c.lat) > latSpan) continue;
-    const dl = dLng(lat), lng = (expJ[k] + 0.5) * dl; if (Math.abs(lng - c.lng) > lngSpan) continue;
-    const p = map.project([lng, lat]); if (p.x < -90 || p.x > cssW + 90 || p.y < -90 || p.y > cssH + 90) continue;
-    const pe = map.project([lng + dl * 1.7, lat]), pn = map.project([lng, lat + dLat * 1.7]);
-    const rx = Math.max(Math.abs(pe.x - p.x), Math.abs(pn.x - p.x)), ry = Math.max(Math.abs(pe.y - p.y), Math.abs(pn.y - p.y));
-    g.drawImage(hole, (p.x - rx) * r, (p.y - ry) * r, 2 * rx * r, 2 * ry * r);
+  const b = map.getBounds(), latSpan = BOX / 111320, lngSpan = BOX / (111320 * Math.cos(c.lat * RAD));
+  const la0 = Math.max(b.getSouth(), c.lat - latSpan), la1 = Math.min(b.getNorth(), c.lat + latSpan);
+  const lo0 = Math.max(b.getWest(), c.lng - lngSpan), lo1 = Math.min(b.getEast(), c.lng + lngSpan);
+  for (let i = Math.floor(la0 / dLat) - 1, i1 = Math.floor(la1 / dLat) + 1; i <= i1; i++) {       // 見えている範囲のマスだけ調べる(探索済みが何万あっても重くならない)
+    const lat = (i + 0.5) * dLat, dl = dLng(lat);
+    for (let j = Math.floor(lo0 / dl) - 1, j1 = Math.floor(lo1 / dl) + 1; j <= j1; j++) {
+      if (!expNum.has(numKey(i, j))) continue;
+      const lng = (j + 0.5) * dl;
+      const p = map.project([lng, lat]); if (p.x < -90 || p.x > cssW + 90 || p.y < -90 || p.y > cssH + 90) continue;
+      const pe = map.project([lng + dl * 1.7, lat]), pn = map.project([lng, lat + dLat * 1.7]);
+      const rx = Math.max(Math.abs(pe.x - p.x), Math.abs(pn.x - p.x)), ry = Math.max(Math.abs(pe.y - p.y), Math.abs(pn.y - p.y));
+      g.drawImage(hole, (p.x - rx) * r, (p.y - ry) * r, 2 * rx * r, 2 * ry * r);
+    }
   }
 }
 
@@ -237,6 +244,8 @@ function rebuildFx() {
     }
   }
 }
+const glow = document.createElement('canvas'); glow.width = glow.height = 32;
+{ const h = glow.getContext('2d'), gr = h.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,246,160,1)'); gr.addColorStop(0.35, 'rgba(255,242,122,.55)'); gr.addColorStop(1, 'rgba(255,242,122,0)'); h.fillStyle = gr; h.fillRect(0, 0, 32, 32); }
 const parts = Array.from({ length: 26 }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, vx: (Math.random() - 0.3) * 0.4, vy: 0.3 + Math.random() * 0.5, p: Math.random() * 6.28, s: 2 + Math.random() * 3 }));
 const wxParts = Array.from({ length: 110 }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, v: 0.6 + Math.random() * 0.8, p: Math.random() * 6.28 }));
 function drawWeather(kind, t) {
@@ -277,8 +286,7 @@ function drawFx(t) {
     if (q.y > cssH + 10) { q.y = -10; q.x = Math.random() * cssW; }
     if (q.x < -10) q.x = cssW + 10; if (q.x > cssW + 10) q.x = -10;
     if (night) {
-      fctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t / 500 + q.p)); fctx.shadowColor = '#fff27a'; fctx.shadowBlur = 12; fctx.fillStyle = '#fff6a0';
-      fctx.beginPath(); fctx.arc(q.x, q.y, q.s * 0.7, 0, 7); fctx.fill(); fctx.shadowBlur = 0;
+      fctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t / 500 + q.p)); const gs = q.s * 4; fctx.drawImage(glow, q.x - gs / 2, q.y - gs / 2, gs, gs);
     } else {
       fctx.globalAlpha = 0.8; fctx.fillStyle = q.p > 3.4 ? 'rgba(255,182,203,.9)' : 'rgba(190,230,150,.9)';
       fctx.beginPath(); fctx.ellipse(q.x, q.y, q.s, q.s * 0.55, q.p + t / 600, 0, 7); fctx.fill();
@@ -288,6 +296,21 @@ function drawFx(t) {
 }
 
 // ---- メインループ(なめらかな移動・カメラ追従・描画) ----
+let fxDrawAt = 0, fpsN = 0, fpsT0 = 0, fpsDone = false;
+function applyLite() {                       // かるいモード: 飾り・アニメーション・3D建物をやめて軽くする
+  document.body.classList.toggle('lite', isLite());
+  resize();
+  try { if (map.getLayer('building')) map.setLayoutProperty('building', 'visibility', isLite() ? 'none' : 'visible'); } catch (e) {}
+  if (isLite()) fctx.clearRect(0, 0, fx.width, fx.height);
+}
+function fpsTick(t) {                        // 最初の数秒のコマ数を測って、重すぎるときは自動でかるいモードにする
+  if (fpsDone || !mapReady || document.hidden) { fpsT0 = 0; return; }
+  if (!fpsT0) { fpsT0 = t; fpsN = 0; return; }
+  fpsN++;
+  if (t - fpsT0 < 6000) return;
+  fpsDone = true; const fps = fpsN / ((t - fpsT0) / 1000);
+  if (fps < 22 && save.lite == null) { save.lite = true; applyLite(); persist(); toast(`⚡ 動作が重いので「かるいモード」にしました\n(測定 ${fps.toFixed(0)}fps ・ 🗺️ で戻せます)`); }
+}
 function frame(t) {
   if (target && avatar) {
     const far = dist(avatar, target) > 1500, k = far ? 1 : 0.1;
@@ -295,7 +318,12 @@ function frame(t) {
     if (meMarker) meMarker.setLngLat([avatar.lng, avatar.lat]);
     if (follow) { const c = map.getCenter(); if (Math.abs(c.lat - avatar.lat) > 1e-8 || Math.abs(c.lng - avatar.lng) > 1e-8) map.jumpTo({ center: [avatar.lng, avatar.lat] }); }
   }
-  try { drawFog(); rebuildFx(); drawFx(t); animWater(t); } catch (e) {}
+  try {
+    drawFog();
+    if (!isLite() && t - fxDrawAt >= 33) { fxDrawAt = t; rebuildFx(); drawFx(t); }       // 飾りは30fpsで十分
+    animWater(t);
+  } catch (e) {}
+  fpsTick(t);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -383,7 +411,7 @@ function addPoi(p) {
   pois.set(p.id, p);
 }
 function showCachedPois(c) {
-  const dl = POI_RADIUS * 1.5 / 111320, dn = dl / Math.cos(c.lat * RAD);
+  const dl = POI_RADIUS * 1.2 / 111320, dn = dl / Math.cos(c.lat * RAD);
   for (const [id, v] of Object.entries(poiCache.items)) {
     if (pois.has(id) || Math.abs(v.la - c.lat) > dl || Math.abs(v.ln - c.lng) > dn) continue;
     addPoi({ id, e: v.e, k: v.k, name: v.n, lat: v.la, lng: v.ln });
@@ -413,8 +441,14 @@ async function fetchPois(center) {
   }
   poiFetching = false; updateHint();
 }
+function prunePois() {                       // 遠くなった名所の印は外す(印が増えすぎると重くなる)
+  const far = POI_RADIUS * 2.2;
+  for (const [id, p] of pois) if (dist(p, me) > far) { if (p.marker) p.marker.remove(); pois.delete(id); }
+  if (pois.size > 140) [...pois.values()].sort((a, b) => dist(b, me) - dist(a, me)).slice(0, pois.size - 140).forEach(p => { if (p.marker) p.marker.remove(); pois.delete(p.id); });
+}
 function maybeFetchPois() {
   if (!me) return;
+  prunePois();
   if (poiCenter && dist(poiCenter, me) <= POI_RADIUS * 0.45) { if (!poiFetching && poiMsg && Date.now() >= poiRetryAt) { poiCenter = null; } else return; }
   showCachedPois(me);                                                                                         // 保存ずみの名所を、すぐ表示
   const fresh = poiCache.at[poiTile(me)] && Date.now() - poiCache.at[poiTile(me)] < 3 * 864e5;
@@ -1335,6 +1369,7 @@ function renderAdvPanel() {
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
   $('adv-toggle').textContent = mode === 'adventure' ? '現実モードにもどる(GPSで歩く)' : '冒険モードにする';
   $('awake').checked = !!save.awake; $('awake-st').textContent = !('wakeLock' in navigator) ? '(このブラウザは未対応)' : wakeLock ? '(今: 有効)' : save.awake ? '(画面を触ると有効になります)' : '';
+  $('lite').checked = isLite();
   $('gate-list').innerHTML = save.gates.length ? save.gates.map(x => `<li><b>🌀 ${esc(x.name)}</b><button data-w="${x.id}">ワープ</button></li>`).join('') : '<li class="note">まだゲートがありません</li>';
   $('gate-list').querySelectorAll('button[data-w]').forEach(b => b.onclick = () => { $('adv').hidden = true; warpTo(save.gates.find(x => x.id === b.dataset.w)); });
   $('gate-add').textContent = `🌀 ゲートを置く (${GATE_COST}🪙) ${save.gates.length}/${MAX_GATES}`;
@@ -1383,6 +1418,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 setTimeout(importShared, 2500);
 $('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
+$('lite').onchange = () => { save.lite = $('lite').checked; fpsDone = true; applyLite(); persist(); };
 $('gate-add').onclick = startPlacingGate;
 const setAp = (n, add) => {
   if (!isFinite(n) || n < 0) return toast('0以上の数を入れてください');
