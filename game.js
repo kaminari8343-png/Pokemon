@@ -511,16 +511,19 @@ function registerRegion(reg, bonus, at) {
   if (newPref || newCity) { persist(); setTimeout(checkTitles, bonus === true ? 2800 : 0); setTimeout(processTotals, 2500); }
   return { newPref, newCity };
 }
-let regionPromise = null;
+let regionPromise = null, regionDone = 0;
+for (const f of Object.values(save.found)) if (!f.region) f.quiet = true;      // 市区町村の記録ができる前に見つけた名所は、静かに振り分ける(ボーナス・演出なし)
+const unsorted = () => Object.values(save.found).filter(f => !f.region && f.lat != null).length;
 function processRegions() {                  // 地域が未取得の名所を、1件ずつ調べる
   if (regionPromise) return regionPromise;
   regionPromise = (async () => {
     try {
       while (true) {
+        for (const [id, f] of Object.entries(save.found)) if (!f.region && f.lat == null) { const q = pois.get(id) || (poiCache.items[id] && { lat: poiCache.items[id].la, lng: poiCache.items[id].ln }); if (q) { f.lat = q.lat; f.lng = q.lng; } }   // 座標が無い古い記録は、名所のデータから補う
         const next = Object.entries(save.found).find(([, f]) => !f.region && f.lat != null);
-        if (!next || Date.now() - regionFailAt < 60000) break;
+        if (!next || Date.now() - regionFailAt < 15000) break;
         const f = next[1];
-        try { f.region = await lookupRegion(f.lat, f.lng); registerRegion(f.region, f.quiet ? 'quiet' : true, f); persist(); }
+        try { f.region = await lookupRegion(f.lat, f.lng); registerRegion(f.region, f.quiet ? 'quiet' : true, f); persist(); regionDone++; if (regionDone % 5 === 0 && !$('book').hidden) renderBook(); }
         catch (e) { regionFailAt = Date.now(); break; }
       }
     } finally { regionPromise = null; }
@@ -540,6 +543,7 @@ function maybeRegionVisit() {
 // 以前に記録した名所の地域を、新しい記録へ取り込む(ボーナスなし)
 for (const f of Object.values(save.found)) if (f.region) registerRegion(f.region, false, f);
 setTimeout(processRegions, 4000);
+setInterval(() => { if (unsorted()) processRegions().then(() => { if (!$('book').hidden) renderBook(); }); }, 20000);      // 失敗しても、自動でやり直す
 
 // ---- 市区町村の達成度: その町にある名所の数を調べ、発見した割合に応じて報酬 ----
 const overpassJson = q => overpassRace(q, 45000, [0, 8000, 16000]);
@@ -1459,6 +1463,8 @@ function renderBook() {
   else if (bookTab === 'titles') html = titlesHtml();
   else if (bookTab === 'recent') html = items.length ? '<ul>' + items.map(bookItem).join('') + '</ul>' : '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
   else {
+    const un = unsorted();
+    if (un) html += `<div class="sortbar">🗂️ 地域の振り分け中… 残り${un}件 <button id="sort-now">いま実行</button></div>`;
     if (!items.length && !nCity()) html = '<div class="empty">まだ何も発見していません。❓を目指して歩こう！</div>';
     const tree = new Map();       // 都道府県 -> 市区町村 -> 町 -> [名所]
     const node = (p, c, t) => {
@@ -1482,6 +1488,7 @@ function renderBook() {
           : `<details data-k="${esc(p + '|' + c + '|' + t)}" ${openKeys.has(p + '|' + c + '|' + t) ? 'open' : ''}><summary>${esc(t)}<b>${fs.length}</b></summary><ul>${fs.map(bookItem).join('')}</ul></details>`).join('') + '</details>').join('') + '</details>').join('');
   }
   $('book-body').innerHTML = html;
+  const sn = $('sort-now'); if (sn) sn.onclick = () => { regionFailAt = 0; sn.textContent = '実行中…'; processRegions().then(() => { if (!$('book').hidden) renderBook(); }); };
   $('book-body').querySelectorAll('li[data-lat]').forEach(li => li.onclick = () => {      // タップでその場所へ
     const lat = parseFloat(li.dataset.lat), lng = parseFloat(li.dataset.lng); if (isNaN(lat)) return;
     $('book').hidden = true; follow = false; map.flyTo({ center: [lng, lat], zoom: 17, pitch: CAM.pitch, duration: 1600 });
