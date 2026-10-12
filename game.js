@@ -1757,6 +1757,21 @@ else {
   setTimeout(() => startPreview('位置情報の取得に時間がかかっています'), 8000);
 }
 save.coins.forEach(addCoinMarker);
+// 街づくり版からもどしたとき: 返金された分を差し引いて、以前の建物を復元。街づくりで使ったコインは返す
+(function restoreLegacy() {
+  let note = '';
+  if (save.builtLegacy && save.builtLegacy.length && !save.built.length) {
+    const back = save.builtLegacy.reduce((s, o) => s + (o.spent || 0), 0);
+    save.built = save.builtLegacy; save.builtLegacy = []; save.gold = Math.max(0, save.gold - back);
+    note += `以前の建物 ${save.built.length}個 を復元しました。`;
+  }
+  const COST = { road: 4, R: 6, C: 8, I: 8, park: 12, power: 120, police: 80, fire: 80, school: 100, hospital: 140, stadium: 300 };
+  if (save.city && save.city.tiles && Object.keys(save.city.tiles).length) {
+    const refund = Object.values(save.city.tiles).reduce((s, t) => s + (COST[t.k] || 0), 0) + Math.floor(save.city.stock || 0);
+    save.gold += refund; save.city = null; note += `街づくりで使ったコイン ${refund}🪙 をお返ししました。`;
+  }
+  if (note) { persist(); setTimeout(() => toast('↩️ 前のバージョンにもどしました\n' + note), 3500); }
+})();
 recalcSyn();
 save.built.forEach(o => addBuiltMarker(o, false));
 reclusterBuilt(); map.once('load', () => { reclusterBuilt(); drawRoads(); });
