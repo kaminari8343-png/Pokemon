@@ -6,7 +6,7 @@ const FOUND_RANGE = 50;       // 名所を発見できる距離(m)
 const POI_RADIUS = 700;       // 名所を探す範囲(m)
 const MIN_STEP = 3;           // これ未満の移動は無視(m)
 const MAX_SPEED = 12;         // m/s これ超は車・GPS飛びとして歩行距離に加算しない
-const TRAIL_MAX = 3000;
+const TRAIL_MAX = 8000;
 const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 const START = { lat: 35.681236, lng: 139.767125 };   // GPSが無いときの開始地点(東京駅)
 const CAM = { zoom: 16.6, pitch: 58 };
@@ -28,7 +28,7 @@ const isNight = () => { const h = hourNow(); return h < 5 || h >= 19; };
 
 // ---- 保存データ ----
 const KEY = 'sanpo-quest';
-const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], regions: { pref: {}, city: {} }, titles: {},
+const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], regions: { pref: {}, city: {} }, titles: {}, ap: 300, adv: null, imports: [], importFp: [],
   stats: { morning: 0, night: 0, rain: 0, snow: 0, hot: 0, cold: 0, dayMax: 0, streak: 0, streakDay: '' } },
   JSON.parse(localStorage.getItem(KEY) || '{}'));
 save.coins = save.coins.filter(c => c.exp > Date.now());
@@ -439,9 +439,11 @@ function registerRegion(reg, bonus, at) {
   const today = todayStr(); let newPref = false, newCity = false;
   if (reg.pref) { const p = save.regions.pref[reg.pref]; if (!p) { save.regions.pref[reg.pref] = { first: today, last: today }; newPref = true; } else p.last = today; }
   if (reg.city) { const k = cityKey(reg), c = save.regions.city[k]; if (!c) { save.regions.city[k] = { pref: reg.pref, city: reg.city, ward: reg.ward || '', first: today, last: today, at: at ? { lat: at.lat, lng: at.lng } : null, total: null, tier: 0 }; newCity = true; } else { c.last = today; if (!c.at && at) c.at = { lat: at.lat, lng: at.lng }; } }
-  if (bonus && newPref) { celebrate('🗾', `はじめての地方！ ${reg.pref}`); addGold(100); addShard(3); toast(`${reg.pref} に初上陸！\nボーナス +100🪙 +3🔮`); }
+  if (bonus === 'quiet') { if (newPref) { save.gold += 100; save.shards += 3; } else if (newCity) { save.gold += 30; save.shards += 1; } updateWallet(); }
+  else if (bonus && newPref) { celebrate('🗾', `はじめての地方！ ${reg.pref}`); addGold(100); addShard(3); toast(`${reg.pref} に初上陸！\nボーナス +100🪙 +3🔮`); }
   else if (bonus && newCity) { celebrate('🏙️', `はじめての町！ ${reg.city}${reg.ward ? ' ' + reg.ward : ''}`); addGold(30); addShard(1); toast(`${reg.city}${reg.ward ? ' ' + reg.ward : ''} に初上陸！\nボーナス +30🪙 +1🔮`); }
-  if (newPref || newCity) { persist(); setTimeout(checkTitles, bonus ? 2800 : 0); setTimeout(processTotals, 2500); }
+  if (newPref || newCity) { persist(); setTimeout(checkTitles, bonus === true ? 2800 : 0); setTimeout(processTotals, 2500); }
+  return { newPref, newCity };
 }
 let regionPromise = null;
 function processRegions() {                  // 地域が未取得の名所を、1件ずつ調べる
@@ -452,7 +454,7 @@ function processRegions() {                  // 地域が未取得の名所を�
         const next = Object.entries(save.found).find(([, f]) => !f.region && f.lat != null);
         if (!next || Date.now() - regionFailAt < 60000) break;
         const f = next[1];
-        try { f.region = await lookupRegion(f.lat, f.lng); registerRegion(f.region, true, f); persist(); }
+        try { f.region = await lookupRegion(f.lat, f.lng); registerRegion(f.region, f.quiet ? 'quiet' : true, f); persist(); }
         catch (e) { regionFailAt = Date.now(); break; }
       }
     } finally { regionPromise = null; }
@@ -714,7 +716,7 @@ function floatText(text) {
   const d = document.createElement('div'); d.className = 'float'; d.textContent = text;
   d.style.left = p.x + 'px'; d.style.top = (p.y - 50) + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1200);
 }
-const updateWallet = () => { $('coins').textContent = `🪙 ${save.gold}  🔮 ${save.shards}`; };
+const updateWallet = () => { $('coins').textContent = `🪙 ${save.gold}  🔮 ${save.shards}  👣 ${Math.floor(save.ap)}`; };
 function addShard(n) { save.shards += n; updateWallet(); floatText(`${n > 0 ? '+' : ''}${n}🔮`); if (n > 0) try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} }
 function addGold(n) {
   save.gold += n; updateWallet();
@@ -849,11 +851,181 @@ for (const o of save.built) {
   o.lv = o.lv || 1; o.last = o.last || Date.now(); o.days = o.days || 1; o.lastDay = o.lastDay || o.d; o.spent = o.spent || ITEM[o.t].cost;
 }
 
+// ---- 冒険モード: 歩いて貯めた👣を使って、いつでも・どこでも冒険する ----
+let mode = 'real', realPos = null, advDest = null, advFlag = null, advTimer = 0;
+const AP_PER_M = 0.1, ADV_SPEED = 10;          // 10m歩くと👣1(貯める) / 冒険で10m進むと👣1(使う)・冒険中の速さは秒速10m
+function stopAdv() {
+  advDest = null; clearInterval(advTimer); advTimer = 0;
+  if (advFlag) { advFlag.remove(); advFlag = null; }
+  persist();
+}
+function setMode(m) {
+  if (m === mode) return; mode = m; stopAdv(); last = null;
+  $('btn-adv').classList.toggle('on', mode === 'adventure');
+  if (mode === 'adventure') { const p = save.adv || realPos || me || START; updatePosition(p.lat, p.lng, 0, true); toast(`🗺️ 冒険モード\n地図をタップすると、👣を使ってそこへ歩いて行きます(10mで👣1)`); }
+  else if (realPos) { updatePosition(realPos.lat, realPos.lng, realPos.acc); toast('現実モードにもどりました'); }
+  renderAdvPanel();
+}
+function advGo(ll) {
+  if (mode !== 'adventure') return;
+  if (save.ap < 1) return toast('👣が足りません。実際に歩くか、GPSログを取り込んで貯めよう');
+  advDest = ll;
+  if (advFlag) advFlag.remove();
+  advFlag = addPin(ll, '', '<div class="flag">🚩</div>');
+  if (!advTimer) advTimer = setInterval(advTick, 200);
+}
+function advTick() {
+  if (!advDest || !me) return stopAdv();
+  const d = dist(me, advDest), step = Math.min(d, ADV_SPEED * 0.2), cost = step * AP_PER_M;
+  if (save.ap < cost) { toast('👣が足りなくなりました。ここで休憩！'); return stopAdv(); }
+  const f = d > 0 ? step / d : 1;
+  save.ap -= cost;
+  updatePosition(me.lat + (advDest.lat - me.lat) * f, me.lng + (advDest.lng - me.lng) * f, 0, true);
+  if (step >= d - 0.01) stopAdv();
+}
+
+// ---- GPSログの取り込み(GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴JSON) ----
+const IMP_MAX_SPEED = 6, IMP_GAP = 300;     // 秒速6m超(車・電車)は除く / 時刻が無いときは300mまでの間隔だけつなぐ
+const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+function parseTracks(text) {
+  const t = text.trim(), out = [];
+  const pt = (lat, lng, tm) => (lat != null && lng != null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) ? { lat, lng, t: tm && !isNaN(tm) ? tm : null } : null;
+  if (t[0] === '<') {
+    const doc = new DOMParser().parseFromString(t, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('形式が読み取れません');
+    const tag = (n, s) => n.getElementsByTagName(s)[0];
+    const tm = n => { const e = tag(n, 'time') || tag(n, 'Time'); return e ? Date.parse(e.textContent) : null; };
+    for (const seg of [...doc.getElementsByTagName('trkseg'), ...doc.getElementsByTagName('rte')])                       // GPX
+      out.push([...seg.getElementsByTagName('trkpt'), ...seg.getElementsByTagName('rtept')].map(n => pt(num(n.getAttribute('lat')), num(n.getAttribute('lon')), tm(n))).filter(Boolean));
+    for (const tr of doc.getElementsByTagName('Track'))                                                                   // TCX
+      out.push([...tr.getElementsByTagName('Trackpoint')].map(n => { const la = tag(n, 'LatitudeDegrees'), lo = tag(n, 'LongitudeDegrees'); return la && lo ? pt(num(la.textContent), num(lo.textContent), tm(n)) : null; }).filter(Boolean));
+    for (const c of doc.getElementsByTagName('coordinates'))                                                              // KML
+      out.push(c.textContent.trim().split(/\s+/).map(s => { const a = s.split(','); return pt(num(a[1]), num(a[0]), null); }).filter(Boolean));
+  } else if (t[0] === '{' || t[0] === '[') {
+    const j = JSON.parse(t);
+    const geo = g => {
+      if (!g) return;
+      if (g.type === 'FeatureCollection') g.features.forEach(f => geo(f.geometry)); else if (g.type === 'Feature') geo(g.geometry);
+      else if (g.type === 'GeometryCollection') g.geometries.forEach(geo);
+      else if (g.type === 'LineString') out.push(g.coordinates.map(c => pt(c[1], c[0], null)).filter(Boolean));
+      else if (g.type === 'MultiLineString') g.coordinates.forEach(l => out.push(l.map(c => pt(c[1], c[0], null)).filter(Boolean)));
+    };
+    if (j.type) geo(j);
+    else {
+      const locs = Array.isArray(j) ? j : j.locations;                                                                    // Googleの位置履歴(Records.json)
+      if (locs) out.push(locs.map(l => pt(l.latitudeE7 != null ? l.latitudeE7 / 1e7 : num(l.latitude ?? l.lat), l.longitudeE7 != null ? l.longitudeE7 / 1e7 : num(l.longitude ?? l.lng ?? l.lon),
+        l.timestamp ? Date.parse(l.timestamp) : l.timestampMs ? +l.timestampMs : null)).filter(Boolean));
+      for (const s of j.semanticSegments || []) if (s.timelinePath)                                                        // Googleマップのタイムライン(端末の書き出し)
+        out.push(s.timelinePath.map(p => { const m = /(-?\d+\.?\d*)\s*°?\s*,\s*(-?\d+\.?\d*)/.exec(String(p.point || '').replace('geo:', '')); return m ? pt(+m[1], +m[2], Date.parse(p.time)) : null; }).filter(Boolean));
+      for (const o of j.timelineObjects || []) {
+        const w = o.activitySegment?.simplifiedRawPath?.points || o.activitySegment?.waypointPath?.waypoints;
+        if (w) out.push(w.map(p => pt(p.latE7 != null ? p.latE7 / 1e7 : null, p.lngE7 != null ? p.lngE7 / 1e7 : null, p.timestamp ? Date.parse(p.timestamp) : null)).filter(Boolean));
+      }
+    }
+  } else {
+    const lines = t.split(/\r?\n/).filter(Boolean), head = lines[0].split(',').map(s => s.trim().toLowerCase());
+    const li = head.findIndex(h => /^(lat|latitude)$/.test(h)), gi = head.findIndex(h => /^(lon|lng|long|longitude)$/.test(h)), ti = head.findIndex(h => /time|date/.test(h));
+    if (li < 0 || gi < 0) throw new Error('緯度・経度の列が見つかりません');
+    out.push(lines.slice(1).map(l => { const c = l.split(','); return pt(num(c[li]), num(c[gi]), ti >= 0 ? Date.parse(c[ti]) : null); }).filter(Boolean));
+  }
+  return out.filter(tr => tr.length > 1);
+}
+// 歩いた区間だけを20mごとの点にする(車・電車などの速い移動や、飛んだ区間はつなげない)
+function buildSamples(tracks) {
+  const samples = [], byDay = {}; let total = 0, morning = 0, night = 0;
+  for (let tr of tracks) {
+    if (tr.every(p => p.t)) tr = [...tr].sort((a, b) => a.t - b.t);
+    let prev = null;
+    for (const p of tr) {
+      if (!prev) { samples.push(p); prev = p; continue; }
+      const d = dist(prev, p), dt = prev.t && p.t ? (p.t - prev.t) / 1000 : null;
+      const ok = dt != null ? (dt > 0 ? d / dt <= IMP_MAX_SPEED && dt <= 3600 : d < 5) : d <= IMP_GAP;
+      if (!ok) { samples.push(p); prev = p; continue; }
+      if (d < 3) continue;
+      const n = Math.max(1, Math.round(d / 20));
+      for (let k = 1; k <= n; k++) { const f = k / n; samples.push({ lat: prev.lat + (p.lat - prev.lat) * f, lng: prev.lng + (p.lng - prev.lng) * f, t: prev.t && p.t ? prev.t + (p.t - prev.t) * f : null }); }
+      total += d;
+      if (prev.t) { const dd = new Date(prev.t), h = dd.getHours(); byDay[dateStr(dd)] = (byDay[dateStr(dd)] || 0) + d; if (h >= 5 && h < 7) morning += d; if (h >= 21 || h < 4) night += d; }
+      prev = p;
+    }
+  }
+  return { samples, total, byDay, morning, night };
+}
+async function overpassPost(q) {
+  for (const url of OVERPASS) { try { const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q) }); if (r.ok) return await r.json(); } catch (e) { /* 次のサーバーへ */ } }
+  throw new Error('overpass');
+}
+async function importFile(file) {
+  const log = msg => { $('imp-status').textContent = msg; };
+  log(`${file.name} を読み込み中…`);
+  let tracks; try { tracks = parseTracks(await file.text()); } catch (e) { return log(`⚠️ ${file.name}: ${e.message || '読み取れませんでした'}`); }
+  if (!tracks.length) return log(`⚠️ ${file.name}: 道すじが見つかりませんでした`);
+  const r = buildSamples(tracks);
+  if (r.samples.length < 2 || r.total < 50) return log(`⚠️ ${file.name}: 歩いた道すじが短い(または移動が速すぎる)ため取り込めません`);
+  const s0 = r.samples[0], fp = `${r.samples.length}|${s0.lat.toFixed(4)},${s0.lng.toFixed(4)}|${Math.round(r.total)}`;
+  if (save.importFp.includes(fp)) return log(`ℹ️ ${file.name} は取り込み済みです`);
+  save.importFp.push(fp);
+  // 1. 霧・足あと・距離・👣
+  const cellsBefore = explored.size;
+  for (let i = 0; i < r.samples.length; i++) {
+    const s = r.samples[i]; revealAround(s); if (i % 2 === 0) save.trail.push([s.lat, s.lng]);
+    if (i % 300 === 0) { log(`霧を晴らし中… ${Math.round(i / r.samples.length * 100)}%`); await sleep(0); }
+  }
+  if (save.trail.length > TRAIL_MAX) save.trail.splice(0, save.trail.length - TRAIL_MAX);
+  const st = save.stats; st.morning += r.morning; st.night += r.night; st.dayMax = Math.max(st.dayMax, ...Object.values(r.byDay), 0);
+  save.total += r.total; save.ap += r.total * AP_PER_M;
+  drawTrail(); updateHud(); updateWallet(); persist();
+  // 2. 通った都道府県・市区町村(1.2kmおきに確認)
+  const picks = []; let lp = null;
+  for (const s of r.samples) if (!lp || dist(lp, s) >= 1200) { picks.push(s); lp = s; }
+  const gain = { pref: 0, city: 0 };
+  for (let i = 0; i < Math.min(picks.length, 120); i++) {
+    log(`通った地域を調べ中… ${i + 1}/${Math.min(picks.length, 120)}`);
+    try { const o = registerRegion(await lookupRegion(picks[i].lat, picks[i].lng), 'quiet', picks[i]); if (o.newPref) gain.pref++; if (o.newCity) gain.city++; } catch (e) { /* 取得できない地点は飛ばす */ }
+  }
+  // 3. 道すじ沿い(50m以内)の名所を発見扱いにする
+  const line = []; lp = null;
+  for (const s of r.samples) if (!lp || dist(lp, s) >= 150) { line.push(s); lp = s; }
+  let poiNew = 0;
+  for (let i = 0; i < Math.min(line.length, 720) && poiNew < 300; i += 60) {
+    const chunk = line.slice(i, i + 61); if (chunk.length < 2) break;
+    log(`道すじの名所を探し中… ${Math.min(i + 60, line.length)}/${line.length}`);
+    const a = `(around:50,${chunk.map(s => s.lat.toFixed(5) + ',' + s.lng.toFixed(5)).join(',')})`;
+    try {
+      const data = await overpassPost(`[out:json][timeout:60];(nwr${a}["name"]["historic"];nwr${a}["name"]["amenity"~"place_of_worship|public_bath|cafe|library"];nwr${a}["name"]["leisure"~"park|garden|nature_reserve"];nwr${a}["name"]["tourism"~"viewpoint|attraction|artwork|museum|gallery"];nwr${a}["name"]["railway"="station"];);out center 300;`);
+      for (const el of data.elements) {
+        const id = el.type + el.id, tg = el.tags || {}, c = classify(tg), lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon;
+        if (!c || lat == null || save.found[id]) continue;
+        let near = null, nd = 1e9; for (const s of r.samples) { const dd = (s.lat - lat) ** 2 + (s.lng - lng) ** 2; if (dd < nd) { nd = dd; near = s; } }
+        save.found[id] = { name: tg['name:ja'] || tg.name, e: c.e, k: c.k, date: near?.t ? dateStr(new Date(near.t)) : todayStr(), lat, lng, region: null, quiet: true };
+        save.gold += 20; save.shards += 1; poiNew++;
+        const p = pois.get(id); if (p) p.marker.getElement().innerHTML = poiHtml(p, true);
+      }
+    } catch (e) { /* 取得できない区間は飛ばす */ }
+    await sleep(1500);
+  }
+  updateWallet(); updateHud(); persist();
+  setTimeout(processRegions, 500); setTimeout(processTotals, 1500); setTimeout(checkTitles, 800); setTimeout(checkCityTiers, 2000);
+  const summary = `${(r.total / 1000).toFixed(1)}km ・ 霧 +${((explored.size - cellsBefore) * CELL * CELL / 1e6).toFixed(3)}km² ・ 名所 +${poiNew} ・ 新しい県 ${gain.pref} / 市区町村 ${gain.city} ・ 👣 +${Math.round(r.total * AP_PER_M)}`;
+  save.imports.unshift({ name: file.name, date: todayStr(), summary }); save.imports.length = Math.min(save.imports.length, 8); persist();
+  log('✅ 取り込み完了: ' + summary); celebrate('📥', `取り込み完了！ ${(r.total / 1000).toFixed(1)}km`); renderAdvPanel();
+}
+function renderAdvPanel() {
+  $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
+  $('adv-toggle').textContent = mode === 'adventure' ? '現実モードにもどる(GPSで歩く)' : '冒険モードにする';
+  $('imp-hist').innerHTML = save.imports.map(h => `<li><b>${esc(h.name)}</b><small>${h.date} ・ ${esc(h.summary)}</small></li>`).join('');
+}
+$('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
+$('adv-close').onclick = () => { $('adv').hidden = true; };
+$('adv-toggle').onclick = () => { setMode(mode === 'adventure' ? 'real' : 'adventure'); $('adv').hidden = true; };
+$('imp-file').onchange = async e => { const files = [...e.target.files]; e.target.value = ''; for (const f of files) await importFile(f); };
+
 // ---- 操作 ----
 map.on('dragstart', () => { follow = false; });
 map.on('click', e => {
   const ll = { lat: e.lngLat.lat, lng: e.lngLat.lng };
   if (placing) return placeAt(ll);
+  if (mode === 'adventure') return advGo(ll);
   if (debug) updatePosition(ll.lat, ll.lng, 0);
 });
 $('btn-locate').onclick = () => { follow = true; if (avatar) map.easeTo({ center: [avatar.lng, avatar.lat], zoom: CAM.zoom, pitch: map.getPitch(), duration: 600 }); };
@@ -940,8 +1112,9 @@ $('btn-book').onclick = () => { bookFresh = true; renderBook(); $('book').hidden
 $('book-close').onclick = () => { $('book').hidden = true; };
 
 // ---- 位置更新 ----
-function updatePosition(lat, lng, accuracy) {
+function updatePosition(lat, lng, accuracy, virtual) {
   const ll = { lat, lng }; me = ll;
+  if (virtual) save.adv = { lat, lng };
   if (!target) {
     avatar = { lat, lng };
     meMarker = addPin(ll, '', `<div class="hero"><i class="ring"></i><span class="sp">${ART.hero(56)}</span><i class="sh"></i></div>`);
@@ -954,9 +1127,9 @@ function updatePosition(lat, lng, accuracy) {
     const d = dist(last.p, ll);
     if (d >= MIN_STEP) {
       const walking = d / Math.max((now - last.t) / 1000, 1) <= MAX_SPEED;
-      if (walking && !debug) {
+      if (walking && !debug && !virtual) {
         if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
-        save.today += d; save.total += d; addStats(d);
+        save.today += d; save.total += d; save.ap += d * AP_PER_M; addStats(d);
         save.trail.push([lat, lng]);
         if (save.trail.length > TRAIL_MAX) save.trail.splice(0, save.trail.length - TRAIL_MAX);
         drawTrail();
@@ -968,20 +1141,20 @@ function updatePosition(lat, lng, accuracy) {
   if (now - weather.at > 30 * 60e3) fetchWeather();
   if (now - (updatePosition.titleAt || 0) > 15000) { updatePosition.titleAt = now; checkTitles(); }
   if (placing) showPlaceCircle();
-  $('status').textContent = (debug ? 'テスト移動中(地図タップで移動)' : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`) + (wxText() ? '  ' + wxText() : '');
+  updateWallet();
+  $('status').textContent = (debug ? 'テスト移動中(地図タップで移動)' : virtual ? `冒険モード 👣${Math.floor(save.ap)} ・ 地図をタップして移動` : `位置取得OK (精度 ${Math.round(accuracy || 0)}m)`) + (wxText() ? '  ' + wxText() : '');
 }
 
 // ---- GPS (取れないときは東京駅からプレビュー) ----
-function startPreview(reason) {
+function startPreview(reason) {            // GPSが取れないときは冒険モードで始める(👣貯金で、地図をタップして歩ける)
   if (me) return;
-  debug = true; $('btn-debug').classList.add('on');
-  updatePosition(START.lat, START.lng, 0);
-  $('status').textContent = reason + ' → プレビュー中(地図タップで移動)';
+  setMode('adventure');
+  $('status').textContent = reason + ' → 冒険モードで開始 👣' + Math.floor(save.ap);
 }
 if (!navigator.geolocation) startPreview('位置情報に未対応');
 else {
   navigator.geolocation.watchPosition(
-    p => { if (!debug) updatePosition(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
+    p => { realPos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }; if (debug || mode === 'adventure') return; updatePosition(realPos.lat, realPos.lng, realPos.acc); },
     err => startPreview('位置情報を取得できません(' + err.message + ')'),
     { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
   );
