@@ -885,6 +885,7 @@ function advTick() {
 }
 
 // ---- GPSログの取り込み(GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴JSON) ----
+const IMP_JITTER = 8;                       // 取り込みで、前の点から8m未満の動きは「ゆれ」として無視する
 const IMP_MAX_JUMP = 150000;                // 取り込みに速度の制限はない(電車・車の移動もそのまま記録)。ただしデータの穴で150km以上飛ぶ区間は、線でつながない(飛行機など)
 const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 // 形式が分からない(または変更された)JSONから、座標らしい値を全部探す。"geo:35.68,139.76" / "35.68°, 139.76°" / latitudeE7 / lat,lng などを、ファイルの並び順に拾う
@@ -1043,7 +1044,7 @@ function buildSamples(tracks) {
       if (!prev) { samples.push(p); prev = p; continue; }
       const d = dist(prev, p);
       if (d > IMP_MAX_JUMP) { samples.push(p); prev = p; continue; }      // 極端に離れた点は、つなげず新しい区間にする
-      if (d < 3) continue;
+      if (d < IMP_JITTER) continue;                                        // 止まっているときのGPSのゆれ(数m)は、動きに数えない
       const n = Math.max(1, Math.round(d / (d > 2000 ? 50 : 20)));
       for (let k = 1; k <= n; k++) { const f = k / n; samples.push({ lat: prev.lat + (p.lat - prev.lat) * f, lng: prev.lng + (p.lng - prev.lng) * f, t: prev.t && p.t ? prev.t + (p.t - prev.t) * f : null }); }
       total += d;
@@ -1065,7 +1066,7 @@ async function importFileInner(file) {
   if (file.size > 200e6) return log(`⚠️ ${file.name}: ファイルが大きすぎます(200MB超)。期間を絞って書き出し直してください`);
   $('imp-diag').hidden = true;
   log(`${file.name} を読み込み中…`);
-  let tracks = [], firstErr = null, diagText = '';
+  let tracks = [], firstErr = null, diagText = '', selfLog = false;
   try {
     if (/\.zip$/i.test(file.name)) {
       if (file.size > 600e6) return log(`⚠️ ${file.name}: ZIPが大きすぎます(600MB超)。位置情報だけを選んで書き出し直してください`);
@@ -1078,6 +1079,7 @@ async function importFileInner(file) {
       if (!entries.length) return log(`⚠️ ${file.name}: ZIPの中に位置情報のファイル(JSON・GPXなど)が見つかりませんでした`);
     } else {
       const tx = await file.text();
+      selfLog = /creator\s*=\s*["']Sanpo Quest/i.test(tx.slice(0, 800));      // このアプリが書き出した記録
       try { tracks = parseTracks(tx); } catch (e) { firstErr = e; }
       if (!tracks.length) diagText = describeText(tx);
     }
@@ -1091,7 +1093,7 @@ async function importFileInner(file) {
   const fresh = tracks.filter(tr => !fpSet.has(trackFp(tr)));
   if (!fresh.length) return log(`ℹ️ ${file.name} は取り込み済みです`);
   const r = buildSamples(fresh);
-  if (r.samples.length < 2 || r.total < 50) return log(`⚠️ ${file.name}: 道すじが短すぎるため取り込めません`);
+  if (!r.samples.length) return log(`⚠️ ${file.name}: 座標が見つかりませんでした`);
   fresh.forEach(tr => fpSet.add(trackFp(tr))); save.importFp = [...fpSet];
   // 1. 霧・足あと・距離・👣
   const cellsBefore = explored.size;
@@ -1100,8 +1102,10 @@ async function importFileInner(file) {
     if (i % 300 === 0) { log(`霧を晴らし中… ${Math.round(i / r.samples.length * 100)}%`); await sleep(0); }
   }
   if (save.trail.length > TRAIL_MAX) save.trail.splice(0, save.trail.length - TRAIL_MAX);
-  const st = save.stats; st.morning += r.morning; st.night += r.night; st.dayMax = Math.max(st.dayMax, ...Object.values(r.byDay), 0);
-  save.total += r.total; save.ap += r.total * AP_PER_M;
+  if (!selfLog) {                                   // このアプリ自身の記録は、距離を現実で歩いた分としてすでに数えているので足さない
+    const st = save.stats; st.morning += r.morning; st.night += r.night; st.dayMax = Math.max(st.dayMax, ...Object.values(r.byDay), 0);
+    save.total += r.total; save.ap += r.total * AP_PER_M;
+  }
   drawTrail(); updateHud(); updateWallet(); persist();
   // 2. 通った都道府県・市区町村(1.2kmおきに確認)
   const picks = []; let lp = null;
@@ -1134,7 +1138,8 @@ async function importFileInner(file) {
   }
   updateWallet(); updateHud(); persist();
   setTimeout(processRegions, 500); setTimeout(processTotals, 1500); setTimeout(checkTitles, 800); setTimeout(checkCityTiers, 2000);
-  const summary = `${(r.total / 1000).toFixed(1)}km ・ 霧 +${((explored.size - cellsBefore) * CELL * CELL / 1e6).toFixed(3)}km² ・ 名所 +${poiNew} ・ 新しい県 ${gain.pref} / 市区町村 ${gain.city} ・ 👣 +${Math.round(r.total * AP_PER_M)}`;
+  const note = selfLog ? ' (このアプリの記録なので、距離と👣は足していません)' : r.total < 20 ? ' (ほとんど移動していない記録です)' : '';
+  const summary = `${(r.total / 1000).toFixed(1)}km ・ 霧 +${((explored.size - cellsBefore) * CELL * CELL / 1e6).toFixed(3)}km² ・ 名所 +${poiNew} ・ 新しい県 ${gain.pref} / 市区町村 ${gain.city} ・ 👣 +${selfLog ? 0 : Math.round(r.total * AP_PER_M)}${note}`;
   save.imports.unshift({ name: file.name, date: todayStr(), summary }); save.imports.length = Math.min(save.imports.length, 8); persist();
   log('✅ 取り込み完了: ' + summary); celebrate('📥', `取り込み完了！ ${(r.total / 1000).toFixed(1)}km`); renderAdvPanel();
 }
@@ -1317,7 +1322,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
   if (!last) last = { p: ll, t: now };
   else {
     const d = dist(last.p, ll);
-    if (d >= MIN_STEP) {
+    if (d >= Math.max(MIN_STEP, Math.min(accuracy || 0, 25) * 0.8)) {          // GPSの誤差より大きく動いたときだけ「動いた」と数える
       const walking = d / Math.max((now - last.t) / 1000, 1) <= MAX_SPEED;
       if (walking && !debug && !virtual) {
         if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
