@@ -3,7 +3,7 @@
 // データの置き場は Supabase(無料)。設定のしかたは ONLINE_SETUP.md を見てください。
 // ※ game.js より先に読み込む。ここは定義だけで、game.js の変数は「呼ばれたとき」に使う。
 
-const ONLINE_CFG = { url: '', key: '' };            // ← Supabase の「Project URL」と「anon public key」を入れる(空のあいだは、オンライン機能はお休み)
+const ONLINE_CFG = { url: 'https://btimkxagkkzzobzzkntq.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0aW1reGFna2t6em9ienprbnRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5MDE0NzUsImV4cCI6MjEwNzQ3NzQ3NX0.XnDV7RTpGtXLJNWhlr21F71hXQT39jef3WgUa39cnds' };            // ← Supabase の「Project URL」と「anon public key」を入れる(空のあいだは、オンライン機能はお休み)
 const OL_HOME_R = 300, OL_CHEER_RANGE = 150, OL_CHEER_GOLD = 5, OL_SYNC_MS = 120000, OL_NEAR = 1500, OL_GATE_NEAR = 5000;
 let sb = null, olMe = null, olFriends = [], olShared = [], olBusy = false, olMsg = '', olSort = 'km';
 const olPins = new Map();
