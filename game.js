@@ -2,6 +2,7 @@
 // ---- 設定 ----
 const CELL = 20;              // 霧のマスの大きさ(m)
 const REVEAL = 70;            // 霧が晴れる半径(m)
+const fxOn = id => !!(save.fx && save.fx[id] > Date.now());      // ショップのアイテムが、いま効いているか
 const FOUND_RANGE = 50;       // 名所を発見できる距離(m)
 const POI_RADIUS = 700;       // 名所を探す範囲(m)
 const MIN_STEP = 3;           // これ未満の移動は無視(m)
@@ -12,7 +13,7 @@ const START = { lat: 35.681236, lng: 139.767125 };   // GPSが無いときの開
 const CAM = { zoom: 16.6, pitch: 58 };
 const RAD = Math.PI / 180, R_EARTH = 6378137;
 let gameReady = false;                       // 起動の準備が終わるまで、レベルの再計算はしない
-function bumpXp(n) { save.xp = (save.xp || 0) + n; if (gameReady) updateLevel(); }
+function bumpXp(n) { save.xp = (save.xp || 0) + n * (fxOn('potion') ? 2 : 1); if (gameReady) updateLevel(); }
 
 // ---- 共通 ----
 const $ = id => document.getElementById(id);
@@ -34,11 +35,11 @@ let stored = {};
 try { const raw = localStorage.getItem(KEY); stored = raw ? JSON.parse(raw) : {}; if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {}; }
 catch (e) { try { localStorage.setItem(KEY + '-corrupt', localStorage.getItem(KEY)); } catch (_) {} stored = {}; }      // こわれた保存データは、別名で残して、新しく始める
 const DEF_STATS = { morning: 0, night: 0, rain: 0, snow: 0, hot: 0, cold: 0, dayMax: 0, streak: 0, streakDay: '' };
-const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], gates: [], regions: { pref: {}, city: {} }, titles: {}, xp: 0, lvDone: null, daily: null, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [], stats: DEF_STATS }, stored);
+const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], gates: [], fx: {}, regions: { pref: {}, city: {} }, titles: {}, xp: 0, lvDone: null, daily: null, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [], stats: DEF_STATS }, stored);
 save.stats = Object.assign({}, DEF_STATS, stored.stats || {});                      // 古い保存データに無い項目を補う
 save.regions = Object.assign({ pref: {}, city: {} }, stored.regions || {});
 for (const k of ['cells', 'trail', 'coins', 'built', 'gates', 'imports', 'importFp', 'log']) if (!Array.isArray(save[k])) save[k] = [];
-for (const k of ['found', 'titles']) if (!save[k] || typeof save[k] !== 'object' || Array.isArray(save[k])) save[k] = {};
+for (const k of ['found', 'titles', 'fx']) if (!save[k] || typeof save[k] !== 'object' || Array.isArray(save[k])) save[k] = {};
 for (const k of ['gold', 'shards', 'ap', 'total', 'today', 'xp']) if (!isFinite(save[k])) save[k] = k === 'ap' ? 300 : 0;
 save.coins = save.coins.filter(c => c && c.exp > Date.now());
 if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
@@ -210,12 +211,13 @@ const hole = document.createElement('canvas'); hole.width = hole.height = 64;
   g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); h.fillStyle = g; h.fillRect(0, 0, 64, 64); }
 const BOX = 900;   // 描画する範囲(カメラ中心から±m)
 function revealAround(p) {
-  const n = Math.ceil(REVEAL / CELL), i0 = Math.floor(p.lat / dLat);
+  const RV = fxOn('fog') ? REVEAL * Math.sqrt(10) : REVEAL;       // 「霧はらしの魔法」: 範囲(面積)10倍
+  const n = Math.ceil(RV / CELL), i0 = Math.floor(p.lat / dLat);
   for (let i = i0 - n; i <= i0 + n; i++) {
     const w = dLng((i + 0.5) * dLat), j0 = Math.floor(p.lng / w);
     for (let j = j0 - n - 1; j <= j0 + n + 1; j++) {
       const c = { lat: (i + 0.5) * dLat, lng: (j + 0.5) * w };
-      if (dist(c, p) <= REVEAL) markCell(i, j);
+      if (dist(c, p) <= RV) markCell(i, j);
     }
   }
 }
@@ -481,7 +483,7 @@ function maybeFetchPois() {
 setInterval(maybeFetchPois, 5000);
 function checkFound() {
   for (const p of pois.values()) {
-    if (save.found[p.id] || dist(p, me) > FOUND_RANGE) continue;
+    if (save.found[p.id] || dist(p, me) > FOUND_RANGE * (fxOn('scope') ? 3 : 1)) continue;
     save.found[p.id] = { name: p.name, e: p.e, k: p.k, date: todayStr(), lat: p.lat, lng: p.lng, region: null };
     setTimeout(processRegions, 800);
     p.marker.getElement().innerHTML = poiHtml(p, true);
@@ -800,7 +802,7 @@ const lvName = n => LV_NAMES[n] || `${LV_NAMES[LV_NAMES.length - 1]} +${n - LV_N
 const xpNow = () => save.total + nFound() * 300 + (save.xp || 0);       // 経験値 = 歩いた距離(m) + 名所×300 + いろいろな行動
 function levelInfo() { const xp = xpNow(); let lv = 0; while (xp >= lvThreshold(lv + 1)) lv++; return { xp, lv, cur: lvThreshold(lv), next: lvThreshold(lv + 1) }; }
 const curLevel = () => levelInfo().lv + 1;                             // 1から数える
-function addXp(n) { save.xp = (save.xp || 0) + Math.round(n); updateLevel(); }
+function addXp(n) { save.xp = (save.xp || 0) + Math.round(n * (fxOn('potion') ? 2 : 1)); updateLevel(); }
 let lastLv = null;
 function updateLevel() {
   const { xp, lv, cur, next } = levelInfo();
@@ -916,13 +918,13 @@ function maintainCoins() {
   }
 }
 function pickCoins(accuracy) {
-  const range = COIN_RANGE + Math.min(accuracy || 0, 30);   // GPS誤差が大きいときはさらにゆるめる
+  const range = (COIN_RANGE + Math.min(accuracy || 0, 30)) * (fxOn('magnet') ? 4 : 1);   // GPS誤差が大きいときはさらにゆるめる
   for (const c of [...save.coins]) {
     if (dist(c, me) > range) continue;
     save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id);
     if (c.k === 'shard') { addShard(1); addXp(10); continue; }
     const luck = Math.min(0.9, save.built.filter(o => ITEM[o.t].lucky && dist(o, c) <= 200).reduce((s, o) => s + 0.15 * lvOf(o), 0));
-    if (Math.random() < luck) { floatText('🍀ご利益 2倍！'); addGold(c.v * 2); } else addGold(c.v);
+    if (fxOn('lucky') || Math.random() < luck) { floatText('🍀ご利益 2倍！'); addGold(c.v * 2); } else addGold(c.v);
     D().coins += c.v; addXp(c.v);
   }
 }
@@ -1185,7 +1187,8 @@ normalizeBuilt();
 
 // ---- 冒険モード: 歩いて貯めた👣を使って、いつでも・どこでも冒険する ----
 let mode = 'real', realPos = null, advDest = null, advFlag = null, advTimer = 0;
-const AP_PER_M = 0.1, ADV_SPEED = 10;          // 10m歩くと👣1(貯める) / 冒険で10m進むと👣1(使う)・冒険中の速さは秒速10m
+const AP_PER_M = 0.1, ADV_SPEED = 10;
+const advMult = () => Math.max(1, ...['bike', 'train', 'plane'].filter(fxOn).map(k => SHOP[k].mult));      // 乗り物アイテムの速さ(倍)          // 10m歩くと👣1(貯める) / 冒険で10m進むと👣1(使う)・冒険中の速さは秒速10m
 function stopAdv() {
   advDest = null; clearInterval(advTimer); advTimer = 0;
   if (advFlag) { advFlag.remove(); advFlag = null; }
@@ -1252,10 +1255,11 @@ function advGo(ll) {
 }
 function advTick() {
   if (!advDest || !me) return stopAdv();
-  const d = dist(me, advDest), step = Math.min(d, ADV_SPEED * 0.2), cost = step * AP_PER_M;
+  const mult = advMult(), d = dist(me, advDest), step = Math.min(d, ADV_SPEED * mult * 0.2), cost = step * AP_PER_M / mult;      // 速いほど、1mあたりの👣は少なくてすむ
   if (save.ap < cost) { toast('👣が足りなくなりました。ここで休憩！'); return stopAdv(); }
   const f = d > 0 ? step / d : 1;
   save.ap -= cost;
+  for (let k = 1; k * 40 < step; k++) { const t = k * 40 / step * f; revealAround({ lat: me.lat + (advDest.lat - me.lat) * t, lng: me.lng + (advDest.lng - me.lng) * t }); }      // 速いときも、通った道の霧を、とぎれずに晴らす
   updatePosition(me.lat + (advDest.lat - me.lat) * f, me.lng + (advDest.lng - me.lng) * f, 0, true);
   updateRealGhost();
   if (step >= d - 0.01) stopAdv();
@@ -1789,7 +1793,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
       const el = Math.max((now - last.t) / 1000, 1), walking = save.speedLimit ? d / el <= MAX_SPEED : d <= Math.min(150000, 300 + el * 90);      // 速度制限は初期状態で解除(電車・車の移動も記録)。1回で150km以上飛ぶ位置は、データの飛びとして無視
       if (walking && !debug && !virtual) {
         if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
-        save.today += d; save.total += d; save.ap += d * AP_PER_M; addStats(d);
+        save.today += d; save.total += d; save.ap += d * AP_PER_M * (fxOn('shoes') ? 2 : 1); addStats(d);
         save.trail.push([lat, lng]);
         if (save.trail.length > TRAIL_MAX) save.trail.splice(0, save.trail.length - TRAIL_MAX);
         drawTrail();
@@ -1850,6 +1854,40 @@ save.coins.forEach(addCoinMarker);
 recalcSyn();
 save.built.forEach(o => addBuiltMarker(o, false));
 reclusterBuilt(); map.once('load', () => { reclusterBuilt(); drawRoads(); });
+
+// ---- ショップ: コインで買う「時間つきアイテム」(買うと、その分の時間だけ効く。重ねて買うと、時間が延びる) ----
+const SHOP = {
+  fog: { e: '🔮', n: '霧はらしの魔法', d: '霧が晴れる範囲が10倍(面積)になる', min: 20, cost: 150 },
+  bike: { e: '🚲', n: '自転車', d: '冒険モードの移動が5倍の速さ(👣の消費も少なめ)', min: 30, cost: 60, mult: 5 },
+  train: { e: '🚄', n: '新幹線', d: '冒険モードの移動が30倍の速さ', min: 20, cost: 150, mult: 30 },
+  plane: { e: '✈️', n: '飛行機', d: '冒険モードの移動が100倍の速さ。通った道の霧は、とぎれずに晴れる', min: 10, cost: 300, mult: 100 },
+  magnet: { e: '🧲', n: 'コイン磁石', d: 'コインを拾える距離が4倍', min: 30, cost: 100 },
+  lucky: { e: '🍀', n: '幸運のクローバー', d: '拾うコインが、すべて2倍', min: 30, cost: 120 },
+  shoes: { e: '👟', n: 'はやあるきの靴', d: '歩いて貯まる👣が2倍', min: 30, cost: 150 },
+  scope: { e: '📡', n: '名所レーダー', d: '名所を発見できる距離が3倍', min: 30, cost: 100 },
+  potion: { e: '🧪', n: '経験値ポーション', d: '手に入る経験値が2倍', min: 30, cost: 200 },
+};
+function buyItem(id) {
+  const it = SHOP[id];
+  if (save.gold < it.cost) return toast('コインが足りません');
+  addGold(-it.cost); const base = Math.max(Date.now(), save.fx[id] || 0); save.fx[id] = base + it.min * 60e3; persist();
+  toast(`${it.e} ${it.n} を使いました(あと${Math.ceil((save.fx[id] - Date.now()) / 60e3)}分)`); renderShop(); renderFxBar();
+}
+const fxLeft = id => Math.max(0, Math.ceil(((save.fx[id] || 0) - Date.now()) / 60e3));
+function renderShop() {
+  $('shop-gold').textContent = '🪙 ' + save.gold;
+  $('shop-list').innerHTML = Object.entries(SHOP).map(([id, it]) => `<div class="shopitem"><span class="ic">${it.e}</span><div><b>${it.n}</b><small>${it.d}</small><small>効果 ${it.min}分${fxLeft(id) ? ` ・ <em>いま あと${fxLeft(id)}分</em>` : ''}</small></div><button data-b="${id}" ${save.gold < it.cost ? 'disabled' : ''}>${it.cost}🪙<br><small>${fxLeft(id) ? '延ばす' : '買う'}</small></button></div>`).join('');
+  $('shop-list').querySelectorAll('button[data-b]').forEach(b => b.onclick = () => buyItem(b.dataset.b));
+}
+function renderFxBar() {                     // 効いているアイテムを、画面の左下に小さく表示
+  const act = Object.keys(SHOP).filter(fxOn);
+  $('fxbar').hidden = !act.length;
+  $('fxbar').innerHTML = act.map(id => `<span>${SHOP[id].e}<small>${fxLeft(id)}分</small></span>`).join('');
+}
+setInterval(() => { renderFxBar(); if (!$('shop').hidden) renderShop(); }, 10000);
+$('btn-shop').onclick = () => { renderShop(); $('shop').hidden = false; };
+$('shop-close').onclick = () => { $('shop').hidden = true; };
+renderFxBar();
 
 // ---- ワープゲート: 行ったことのある場所(霧が晴れた場所)に置くと、冒険モードでいつでもそこへ飛べる ----
 const GATE_COST = 30, MAX_GATES = 100;

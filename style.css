@@ -81,7 +81,7 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 #placebar span{flex:1 1 100%}
 #placebar button{flex:1;border:0;border-radius:10px;padding:9px;background:#ffd873;color:#3a2a10;font:inherit;font-weight:700}
 #placebar #place-cancel{background:#5b4326;color:#fff}
-#book,#build,#obj{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center}
+#book,#build,#obj,#shop{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center}
 .card{background:#f6ecd0;color:#3a2a10;border-radius:16px;padding:18px;width:min(340px,90vw);max-height:80vh;overflow:auto}
 .card h2{margin:0 0 8px}
 .card h2 small{font-size:13px;font-weight:700;color:#8a5a00;margin-left:6px}
@@ -225,3 +225,6 @@ svg.jp text{font-size:8px}
 .obj.fr{filter:drop-shadow(0 0 5px #6ab0ff)}.frgate{filter:hue-rotate(-60deg) drop-shadow(0 0 5px #6ab0ff)}.frgate .gn{display:none}
 .ol-req{display:flex;gap:6px;align-items:center;margin-top:6px}.ol-req span{flex:1;font-weight:700}.ol-req button{width:auto!important;padding:6px 12px!important}.ol-req button.dim{background:#e8d0cc!important;color:#3a2a10!important}
 .heropick{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}.heropick button{display:flex;flex-direction:column;align-items:center;gap:0;padding:4px 0!important;background:#fff8e1!important;color:#3a2a10!important;border:2px solid #d9c9a0!important;border-radius:10px}.heropick button.on{border-color:#e08a00!important;background:#ffe9a8!important;box-shadow:0 0 0 2px #e08a00}.heropick small{font-size:10px;font-weight:700;line-height:1.1}
+#fxbar{position:absolute;left:12px;bottom:78px;z-index:1000;display:flex;gap:6px;flex-wrap:wrap;max-width:60%}#fxbar span{background:rgba(24,30,44,.86);color:#f6ecd0;border:1px solid rgba(255,220,140,.35);border-radius:12px;padding:3px 8px;font-size:14px}#fxbar small{font-size:11px;margin-left:3px;opacity:.85}
+.shopitem{display:flex;gap:8px;align-items:center;background:#fff8e1;border-radius:12px;padding:8px;margin-bottom:6px}.shopitem .ic{font-size:30px}.shopitem div{flex:1}.shopitem b{display:block;font-size:14px}.shopitem small{display:block;font-size:11px;opacity:.8;line-height:1.35}.shopitem em{color:#2f7d4f;font-style:normal;font-weight:700}
+.shopitem button{width:auto!important;min-width:64px;padding:6px 8px!important;line-height:1.2}.shopitem button:disabled{opacity:.4}

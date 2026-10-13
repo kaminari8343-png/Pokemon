@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=43">
+<link rel="stylesheet" href="style.css?v=44">
 </head>
 <body>
 <div id="map"></div>
@@ -33,6 +33,7 @@
 <div id="btns">
   <button id="btn-adv" title="冒険モード・取り込み">🗺️</button>
   <button id="btn-view" title="見下ろし/斜め">🧭</button>
+  <button id="btn-shop" title="ショップ">🛍️</button>
   <button id="btn-build" title="つくる">🔨</button>
   <button id="btn-book" title="冒険の書">📖</button>
   <button id="btn-refresh" title="更新(長押しでアプリを最新版に)">🔄</button>
@@ -44,6 +45,15 @@
   <button id="place-here">足もとに置く</button>
   <button id="place-cancel">やめる</button>
 </div>
+<section id="shop" hidden>
+  <div class="card">
+    <h2>🛍️ ショップ <small id="shop-gold"></small></h2>
+    <p class="note">コインで買う、時間つきのアイテム。買うとすぐ効いて、時間がたつと切れます(重ねて買うと延びます)。</p>
+    <div id="shop-list"></div>
+    <button id="shop-close">閉じる</button>
+  </div>
+</section>
+<div id="fxbar" hidden></div>
 <section id="build" hidden>
   <div class="card">
     <h2>🔨 つくる <small id="build-gold"></small></h2>
@@ -109,10 +119,10 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=43"></script>
-<script src="jpmap.js?v=43"></script>
+<script src="art.js?v=44"></script>
+<script src="jpmap.js?v=44"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="online.js?v=43"></script>
-<script src="game.js?v=43"></script>
+<script src="online.js?v=44"></script>
+<script src="game.js?v=44"></script>
 </body>
 </html>
