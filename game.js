@@ -1739,6 +1739,24 @@ $('app-update').onclick = updateApp;
 $('speedlimit').onchange = () => { save.speedLimit = $('speedlimit').checked; last = null; persist(); toast(save.speedLimit ? '🚶 速度制限をオン(時速43km超は記録しません)' : '🚃 速度制限を解除(乗り物の移動も記録します)'); };
 $('lite').onchange = () => { save.lite = $('lite').checked; fpsDone = true; applyLite(); persist(); };
 $('gate-add').onclick = startPlacingGate;
+// 🧰 データを失ったときの、手動の復旧: 行った都道府県・市区町村を、自分で登録し直す(ボーナスなし。名所や距離は、取りもどせません)
+$('restore-regions').onclick = () => {
+  $('adv').hidden = true;
+  $('obj-title').innerHTML = '<span class="ic">🧰</span>行った場所を登録しなおす';
+  $('obj-sub').innerHTML = `<div>行ったことのある都道府県にチェックを入れてください(日本地図が塗られます)。ボーナスは出ません。</div><div class="prefgrid">${PREFS.map((p, i) => `<label><input type="checkbox" data-p="${i}" ${save.regions.pref[p[0]] ? 'checked disabled' : ''}>${p[0].replace(/[都道府県]$/, '')}</label>`).join('')}</div>` +
+    `<div>行った市区町村も、1行ずつ「県名 市名」で書けます(例: 神奈川県 鎌倉市)</div><textarea id="rr-cities" rows="4" placeholder="愛知県 名古屋市&#10;大阪府 大阪市 北区"></textarea>`;
+  const eb = $('obj-evo'); eb.hidden = false; eb.disabled = false; eb.textContent = '登録する'; $('obj-del').hidden = true;
+  eb.onclick = () => {
+    let np = 0, nc = 0;
+    $('obj-sub').querySelectorAll('input[data-p]:checked:not(:disabled)').forEach(c => { const o = registerRegion({ pref: PREFS[+c.dataset.p][0], city: '', ward: '', town: '' }, false); if (o.newPref) np++; });
+    for (const line of ($('rr-cities').value || '').split('\n')) {
+      const w = line.trim().split(/[\s　]+/).filter(Boolean); if (w.length < 2) continue;
+      const o = registerRegion({ pref: w[0], city: w[1], ward: w[2] || '', town: '' }, false); if (o.newCity) nc++;
+    }
+    persist(); checkTitles(); $('obj').hidden = true; toast(`🧰 都道府県 ${np}件・市区町村 ${nc}件 を登録しました`);
+  };
+  $('obj').hidden = false;
+};
 const setAp = (n, add) => {
   if (!isFinite(n) || n < 0) return toast('0以上の数を入れてください');
   save.ap = Math.min(1e7, Math.round(add ? save.ap + n : n)); persist(); renderAdvPanel(); updateHud();
