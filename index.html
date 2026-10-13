@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=37">
 </head>
 <body>
 <div id="map"></div>
@@ -68,6 +68,7 @@
     <p class="note">歩いた距離は 👣 として貯まります(10mで1)。冒険モードでは、現実の場所に関係なく、地図をタップした場所へ👣を使って歩いて行けます(10mで1)。霧・コイン・名所は進みますが、「歩いた距離」には数えません。</p>
     <button id="adv-toggle"></button>
     <label class="awake"><input id="awake" type="checkbox"> 🔆 ゲーム中は画面をつけたままにする <small id="awake-st"></small></label>
+    <label class="awake"><input id="speedlimit" type="checkbox"> 🚶 速度制限(時速43km超は、歩いた距離に数えない) <small>オフだと、電車・車の移動も記録します</small></label>
     <label class="awake"><input id="lite" type="checkbox"> ⚡ かるいモード(重いとき) <small>飾り・アニメ・3D建物をやめて軽くします</small></label>
     <button id="app-update" class="sub2">🔄 アプリを最新版に更新する</button>
     <h3>⚙️ 👣の設定</h3>
@@ -105,10 +106,10 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=36"></script>
-<script src="jpmap.js?v=36"></script>
+<script src="art.js?v=37"></script>
+<script src="jpmap.js?v=37"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="online.js?v=36"></script>
-<script src="game.js?v=36"></script>
+<script src="online.js?v=37"></script>
+<script src="game.js?v=37"></script>
 </body>
 </html>

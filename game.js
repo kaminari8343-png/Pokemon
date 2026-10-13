@@ -1486,7 +1486,7 @@ function renderAdvPanel() {
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
   $('adv-toggle').textContent = mode === 'adventure' ? '現実モードにもどる(GPSで歩く)' : '冒険モードにする';
   $('awake').checked = !!save.awake; $('awake-st').textContent = !('wakeLock' in navigator) ? '(このブラウザは未対応)' : wakeLock ? '(今: 有効)' : save.awake ? '(画面を触ると有効になります)' : '';
-  $('lite').checked = isLite();
+  $('lite').checked = isLite(); $('speedlimit').checked = !!save.speedLimit;
   $('gate-list').innerHTML = save.gates.length ? save.gates.map(x => `<li><b>🌀 ${esc(x.name)}</b><button data-w="${x.id}">ワープ</button></li>`).join('') : '<li class="note">まだゲートがありません</li>';
   $('gate-list').querySelectorAll('button[data-w]').forEach(b => b.onclick = () => { $('adv').hidden = true; warpTo(save.gates.find(x => x.id === b.dataset.w)); });
   $('gate-add').textContent = `🌀 ゲートを置く (${GATE_COST}🪙) ${save.gates.length}/${MAX_GATES}`;
@@ -1562,6 +1562,7 @@ function updateApp() {
   $('btn-refresh').addEventListener('pointerdown', () => { long = false; pt = setTimeout(() => { long = true; updateApp(); }, 900); });
   for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('btn-refresh').addEventListener(ev, () => clearTimeout(pt)); }
 $('app-update').onclick = updateApp;
+$('speedlimit').onchange = () => { save.speedLimit = $('speedlimit').checked; last = null; persist(); toast(save.speedLimit ? '🚶 速度制限をオン(時速43km超は記録しません)' : '🚃 速度制限を解除(乗り物の移動も記録します)'); };
 $('lite').onchange = () => { save.lite = $('lite').checked; fpsDone = true; applyLite(); persist(); };
 $('gate-add').onclick = startPlacingGate;
 const setAp = (n, add) => {
@@ -1725,7 +1726,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
   else {
     const d = dist(last.p, ll);
     if (d >= Math.max(MIN_STEP, Math.min(accuracy || 0, 25) * 0.8)) {          // GPSの誤差より大きく動いたときだけ「動いた」と数える
-      const walking = d / Math.max((now - last.t) / 1000, 1) <= MAX_SPEED;
+      const walking = save.speedLimit ? d / Math.max((now - last.t) / 1000, 1) <= MAX_SPEED : d <= 150000;      // 速度制限は初期状態で解除(電車・車の移動も記録)。1回で150km以上飛ぶ位置は、データの飛びとして無視
       if (walking && !debug && !virtual) {
         if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
         save.today += d; save.total += d; save.ap += d * AP_PER_M; addStats(d);
