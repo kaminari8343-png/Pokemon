@@ -249,6 +249,45 @@ window.ART = (function () {
     path('M18 58 L22 34 Q32 30 42 34 L46 58 Z', '#6a4ab8') + path('M24 40 L40 40 L41 46 L23 46 Z', '#8a6ad8') +
     circ(32, 28, 9, '#ffd9b8') + path('M24 31 Q32 46 40 31 Q36 36 32 36 Q28 36 24 31Z', '#f4f4f4') + circ(28.5, 27, 1.4, O, false) + circ(35.5, 27, 1.4, O, false) +
     ell(32, 20, 17, 5, '#5a3aa8') + poly('19,20 32,-2 45,20', '#6a4ab8') + `<polygon points="${starPts(34, 10, 4.5, 1.8)}" fill="#ffe066" stroke="none"/>`;
+  // ---- 主人公(キャラクター8人) ----
+  const HG = id => glow('hg' + id, 32, 34, 30, '#ffd873', 0.35);
+  const face = (y = 28, skin = '#ffd9b8') => circ(32, y, 9, skin) + circ(28.5, y - 1, 1.4, O, false) + circ(35.5, y - 1, 1.4, O, false) + path(`M29.5 ${y + 3.5} Q32 ${y + 5.5} 34.5 ${y + 3.5}`, 'none').replace('fill="none"', 'fill="none"');
+  const HEROES = [
+    { id: 'mage', name: 'まほうつかい', svg: () => HERO() },
+    { id: 'knight', name: 'けんし', svg: () => HG('k') +
+      rect(14, 28, 3, 28, '#cfd8e0', 1) + poly('13.5,28 17.5,28 15.5,22', '#e8eef4') + rect(11, 40, 9, 3, '#8b5a2b', 1) +
+      path('M20 58 L23 35 Q32 31 41 35 L44 58 Z', '#d9443a') + path('M26 40 L38 40 L39 47 L25 47 Z', '#f2c94c') + rect(29, 35, 6, 3, '#f2c94c', 1) +
+      face(28) + path('M22 27 Q32 8 42 27 L42 22 Q32 5 22 22Z', '#9fb0c0') + rect(22, 21, 20, 5, '#b8c6d4') + rect(30, 7, 4, 8, '#e2574c', 1) },
+    { id: 'explorer', name: 'たんけんか', svg: () => HG('e') +
+      rect(46, 10, 3, 48, '#8b5a2b', 1) + poly('49,10 61,15 49,20', '#e2574c') +
+      path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#4a9a52') + rect(14, 36, 8, 14, '#a9743f') + rect(25, 41, 14, 4, '#f3d9a8', 1) +
+      face(28) + circ(28.5, 27.5, 3, 'none', true).replace(/fill="none"/, 'fill="rgba(255,255,255,.25)"') + circ(35.5, 27.5, 3, 'rgba(255,255,255,.25)') +
+      ell(32, 21, 16, 4.5, '#c98a4b') + path('M22 21 Q32 6 42 21Z', '#d9a066') + rect(22, 17, 20, 3, '#8a4a2a', 1) + path('M40 14 Q50 4 52 12 Q46 10 40 17Z', '#e2574c') },
+    { id: 'ninja', name: 'にんじゃ', svg: () => HG('n') +
+      rect(10, 36, 22, 3, '#8b8b9b', 1) + line(10, 37.5, 5, 33, '#8b8b9b', 2) +
+      path('M18 58 L22 35 Q32 31 42 35 L46 58 Z', '#2f3a6a') + path('M24 41 L40 41 L41 46 L23 46 Z', '#e2574c') +
+      circ(32, 28, 9, '#2f3a6a') + rect(24, 24, 16, 7, '#ffd9b8', 2) + circ(28.5, 27.5, 1.3, O, false) + circ(35.5, 27.5, 1.3, O, false) +
+      rect(22, 19, 20, 4, '#e2574c', 1) + path('M42 20 Q52 20 54 28 Q48 24 42 24Z', '#e2574c') },
+    { id: 'prince', name: 'おうじさま', svg: () => HG('p') +
+      rect(46, 14, 3, 44, '#e8b23a', 1) + circ(47.5, 12, 5.5, '#ff9ec7') + sparkle(55, 6, 1) +
+      path('M16 58 L22 34 Q32 30 42 34 L48 58 Z', '#e86aa0') + path('M24 40 L40 40 L41 47 L23 47 Z', '#fff') + circ(32, 42, 1.6, '#ffd24a', false) +
+      face(28) + path('M23 24 Q32 14 41 24 Q36 20 32 20 Q28 20 23 24Z', '#d9a066') +
+      path('M23 19 L25 10 L29 16 L32 8 L35 16 L39 10 L41 19Z', '#ffd24a') + circ(32, 11, 1.6, '#e2574c', false) },
+    { id: 'cat', name: 'ねこ', svg: () => HG('c') +
+      path('M42 52 Q56 50 54 38 Q54 46 44 46Z', '#f0a24a') +
+      path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#5a8ad8') + path('M25 41 L39 41 L40 46 L24 46Z', '#9fc4f4') +
+      circ(32, 28, 10, '#f0a24a') + poly('23,22 24,10 31,19', '#f0a24a') + poly('41,22 40,10 33,19', '#f0a24a') + poly('25,19 25.5,13 29,18', '#ffb3c8') + poly('39,19 38.5,13 35,18', '#ffb3c8') +
+      circ(28.5, 27, 1.5, O, false) + circ(35.5, 27, 1.5, O, false) + circ(32, 31, 1.4, '#e2574c', false) + line(24, 30, 19, 29, O, 1) + line(24, 32, 19, 33, O, 1) + line(40, 30, 45, 29, O, 1) + line(40, 32, 45, 33, O, 1) },
+    { id: 'robot', name: 'ロボット', svg: () => HG('r') +
+      line(32, 8, 32, 14, '#8b8b9b', 2) + circ(32, 7, 3, '#e2574c') +
+      rect(19, 33, 26, 22, '#9fb0c8') + rect(25, 39, 14, 9, '#6ec6ff', 2) + circ(29, 43.5, 1.6, '#fff', false) + circ(35, 43.5, 1.6, '#fff', false) +
+      rect(12, 34, 7, 16, '#8a9ab0', 3) + rect(45, 34, 7, 16, '#8a9ab0', 3) + rect(23, 55, 7, 4, '#6a7a90', 1) + rect(34, 55, 7, 4, '#6a7a90', 1) +
+      rect(22, 14, 20, 17, '#b8c6d8', 4) + rect(25, 19, 14, 7, '#2f3a6a', 2) + circ(29, 22.5, 1.8, '#6fffb0', false) + circ(35, 22.5, 1.8, '#6fffb0', false) },
+    { id: 'ghost', name: 'おばけ', svg: () => HG('g') +
+      path('M18 58 L18 30 Q18 12 32 12 Q46 12 46 30 L46 58 Q42 52 38 58 Q34 52 32 58 Q28 52 26 58 Q22 52 18 58Z', '#f4f4ff') +
+      circ(27, 30, 2.4, O, false) + circ(37, 30, 2.4, O, false) + ell(32, 38, 3, 2.2, '#8a8ab8') + circ(23, 35, 2.2, '#ffb3c8', false) + circ(41, 35, 2.2, '#ffb3c8', false) +
+      path('M22 14 Q32 22 42 14 Q38 24 32 24 Q26 24 22 14Z', '#e2574c') + path('M24 22 L22 30 L28 24Z', '#e2574c') },
+  ];
   const BUTTERFLY = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><path d="M16 16 Q4 2 3 12 Q3 20 16 17Z" fill="#ff9a3d" ${SW(1.4)}/><path d="M16 16 Q28 2 29 12 Q29 20 16 17Z" fill="#ff9a3d" ${SW(1.4)}/><path d="M16 17 Q6 20 8 27 Q14 28 16 18Z" fill="#ffd24a" ${SW(1.4)}/><path d="M16 17 Q26 20 24 27 Q18 28 16 18Z" fill="#ffd24a" ${SW(1.4)}/><rect x="15" y="9" width="2" height="14" rx="1" fill="${O}"/></svg>`;
   // ---- 地面の飾り(キャンバス用) ----
   const DECOR = [
@@ -267,7 +306,8 @@ window.ART = (function () {
     poiColor: kind => POI_COLOR[kind] || '#ffd873',
     poiKinds: () => Object.keys(POI),
     coin: (kind, px = 40) => svg(COIN[kind || 'coin'](), px),
-    hero: (px = 56) => svg(HERO(), px),
+    hero: (px = 56, id) => svg((HEROES.find(h => h.id === id) || HEROES[0]).svg(), px),
+    heroes: () => HEROES.map(h => ({ id: h.id, name: h.name })),
     butterfly: BUTTERFLY,
     decorSvgs: DECOR.map(f => svg(f(), 64)),
     sheet: () => Object.keys(ITEMS).map(id => [1, 2, 3].map(l => svg(ITEMS[id][l - 1](), 72)).join('')).join('<br>') + '<br>' +

@@ -1204,7 +1204,7 @@ function updateRealGhost() {                 // 冒険中: 現実のあなたの
   if (!realPos) { $('real-text').textContent = '現実の現在地を取得中…'; return; }
   const d = me ? dist(me, realPos) : 0;
   $('real-text').textContent = d < 30 ? '現実の現在地のすぐ近くです' : `現実のあなたは ${fmt(d)} ${DIRS[Math.round(bearing(me, realPos) / 45) % 8]}の方角`;
-  if (!ghost) ghost = addPin(realPos, 'ghostpin', `<div class="ghost"><span class="sp">${ART.hero(44)}</span><b>現実の<br>あなた</b></div>`, () => returnToReal());
+  if (!ghost) ghost = addPin(realPos, 'ghostpin', `<div class="ghost"><span class="sp">${ART.hero(44, heroId())}</span><b>現実の<br>あなた</b></div>`, () => returnToReal());
   else ghost.setLngLat([realPos.lng, realPos.lat]);
 }
 function setMode(m) {
@@ -1528,7 +1528,15 @@ async function importFile(file) {
   try { await importFileRaw(file); }
   catch (e) { $('imp-status').textContent = `⚠️ ${file.name}: 想定外のエラー(${e && e.message || e})。下の診断を、そのままコピーして教えてください`; $('imp-diag').value = `エラー: ${e && e.stack || e}`; $('imp-diag').hidden = false; }
 }
+const heroId = () => ART.heroes().some(h => h.id === save.hero) ? save.hero : 'mage';
+function refreshHero() {                    // 選んだキャラクターに、地図の上の姿を取りかえる
+  const id = heroId();
+  if (meMarker) { const sp = meMarker.getElement().querySelector('.sp'); if (sp) sp.innerHTML = ART.hero(56, id); }
+  if (ghost) { const sp = ghost.getElement().querySelector('.sp'); if (sp) sp.innerHTML = ART.hero(44, id); }
+}
 function renderAdvPanel() {
+  $('hero-pick').innerHTML = ART.heroes().map(h => `<button data-h="${h.id}" class="${h.id === heroId() ? 'on' : ''}">${ART.hero(52, h.id)}<small>${h.name}</small></button>`).join('');
+  $('hero-pick').querySelectorAll('button').forEach(b => b.onclick = () => { save.hero = b.dataset.h; persist(); refreshHero(); renderAdvPanel(); toast(`👤 キャラクターを「${ART.heroes().find(h => h.id === save.hero).name}」にしました`); });
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
   $('adv-toggle').textContent = mode === 'adventure' ? '現実モードにもどる(GPSで歩く)' : '冒険モードにする';
   $('awake').checked = !!save.awake; $('awake-st').textContent = !('wakeLock' in navigator) ? '(このブラウザは未対応)' : wakeLock ? '(今: 有効)' : save.awake ? '(画面を触ると有効になります)' : '';
@@ -1768,7 +1776,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
   if (virtual) save.adv = { lat, lng };
   if (!target) {
     avatar = { lat, lng };
-    meMarker = addPin(ll, '', `<div class="hero"><i class="ring"></i><span class="sp">${ART.hero(56)}</span><i class="sh"></i></div>`);
+    meMarker = addPin(ll, '', `<div class="hero"><i class="ring"></i><span class="sp">${ART.hero(56, heroId())}</span><i class="sh"></i></div>`);
     map.jumpTo({ center: [lng, lat] });
   }
   target = ll;

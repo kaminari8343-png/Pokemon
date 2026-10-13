@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=42">
+<link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
 <div id="map"></div>
@@ -77,6 +77,8 @@
     <div class="apset"><input id="ap-amount" type="number" inputmode="numeric" min="0" max="10000000" step="100" value="1000"><span>👣</span></div>
     <div class="apset"><button id="ap-add" class="sub2">加算する</button><button id="ap-set" class="sub2">この数にする</button></div>
     <div class="apset"><button class="sub2 apq" data-n="1000">+1,000</button><button class="sub2 apq" data-n="10000">+10,000</button><button class="sub2 apq" data-n="100000">+100,000</button></div>
+    <h3>👤 キャラクター</h3>
+    <div id="hero-pick" class="heropick"></div>
     <h3>🌀 ワープゲート</h3>
     <p class="note">行ったことのある場所(霧が晴れた所)にゲートを置くと、冒険モードで、どこからでも一瞬でそこへ飛べます。地図のゲートをタップしてもOK。</p>
     <ul id="gate-list" class="gates"></ul>
@@ -107,10 +109,10 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=42"></script>
-<script src="jpmap.js?v=42"></script>
+<script src="art.js?v=43"></script>
+<script src="jpmap.js?v=43"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="online.js?v=42"></script>
-<script src="game.js?v=42"></script>
+<script src="online.js?v=43"></script>
+<script src="game.js?v=43"></script>
 </body>
 </html>
