@@ -30,10 +30,17 @@ const isNight = () => { const h = hourNow(); return h < 5 || h >= 19; };
 
 // ---- 保存データ ----
 const KEY = 'sanpo-quest';
-const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], regions: { pref: {}, city: {} }, titles: {}, xp: 0, lvDone: null, daily: null, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [],
-  stats: { morning: 0, night: 0, rain: 0, snow: 0, hot: 0, cold: 0, dayMax: 0, streak: 0, streakDay: '' } },
-  JSON.parse(localStorage.getItem(KEY) || '{}'));
-save.coins = save.coins.filter(c => c.exp > Date.now());
+let stored = {};
+try { const raw = localStorage.getItem(KEY); stored = raw ? JSON.parse(raw) : {}; if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {}; }
+catch (e) { try { localStorage.setItem(KEY + '-corrupt', localStorage.getItem(KEY)); } catch (_) {} stored = {}; }      // こわれた保存データは、別名で残して、新しく始める
+const DEF_STATS = { morning: 0, night: 0, rain: 0, snow: 0, hot: 0, cold: 0, dayMax: 0, streak: 0, streakDay: '' };
+const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], gates: [], regions: { pref: {}, city: {} }, titles: {}, xp: 0, lvDone: null, daily: null, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [], stats: DEF_STATS }, stored);
+save.stats = Object.assign({}, DEF_STATS, stored.stats || {});                      // 古い保存データに無い項目を補う
+save.regions = Object.assign({ pref: {}, city: {} }, stored.regions || {});
+for (const k of ['cells', 'trail', 'coins', 'built', 'gates', 'imports', 'importFp', 'log']) if (!Array.isArray(save[k])) save[k] = [];
+for (const k of ['found', 'titles']) if (!save[k] || typeof save[k] !== 'object' || Array.isArray(save[k])) save[k] = {};
+for (const k of ['gold', 'shards', 'ap', 'total', 'today', 'xp']) if (!isFinite(save[k])) save[k] = k === 'ap' ? 300 : 0;
+save.coins = save.coins.filter(c => c && c.exp > Date.now());
 if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
 const explored = new Set(), expI = [], expJ = [], expNum = new Set();      // expNum: 数値のキー(霧の描画を速くするための索引)
 const numKey = (i, j) => i * 2097152 + j;
@@ -41,12 +48,21 @@ let expVer = 0;
 function markCell(i, j) {
   const k = i + ',' + j;
   if (explored.has(k)) return false;
-  explored.add(k); expNum.add(numKey(i, j)); expI.push(i); expJ.push(j); expVer++; return true;
+  explored.add(k); expNum.add(numKey(i, j)); expI.push(i); expJ.push(j); expVer++; if (cellsReady) save.cells.push(k); return true;
 }
-save.cells.forEach(k => { const [i, j] = k.split(',').map(Number); markCell(i, j); });
-function persist() { save.cells = [...explored]; try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} }
+let cellsReady = false;
+for (const k of save.cells) { const [i, j] = String(k).split(',').map(Number); if (isFinite(i) && isFinite(j)) markCell(i, j); }
+cellsReady = true;
+let persistFailed = false;
+function persist() {                         // 保存。容量がいっぱいのときは、古い記録を減らして、それでもだめなら知らせる
+  try { localStorage.setItem(KEY, JSON.stringify(save)); persistFailed = false; }
+  catch (e) {
+    try { save.log.splice(0, Math.max(0, save.log.length - 3000)); localStorage.removeItem('sanpo-poi'); localStorage.setItem(KEY, JSON.stringify(save)); }
+    catch (e2) { if (!persistFailed) { persistFailed = true; try { toast('⚠️ 保存容量がいっぱいです。GPX書き出しなどで整理してください'); } catch (e3) {} } }
+  }
+}
 let persistTimer = 0;
-function persistSoon() { if (!persistTimer) persistTimer = setTimeout(() => { persistTimer = 0; persist(); }, 2000); }
+function persistSoon() { if (!persistTimer) persistTimer = setTimeout(() => { persistTimer = 0; persist(); }, explored.size > 100000 ? 10000 : 3000); }
 addEventListener('pagehide', persist);
 document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
 
@@ -417,17 +433,18 @@ function addPoi(p) {
 }
 function showCachedPois(c) {
   const dl = POI_RADIUS * 1.2 / 111320, dn = dl / Math.cos(c.lat * RAD);
-  for (const [id, v] of Object.entries(poiCache.items)) {
-    if (pois.has(id) || Math.abs(v.la - c.lat) > dl || Math.abs(v.ln - c.lng) > dn) continue;
-    addPoi({ id, e: v.e, k: v.k, name: v.n, lat: v.la, lng: v.ln });
-  }
+  const room = 140 - pois.size; if (room <= 0) return;                                  // 印は140個まで。近いものから出す
+  const cand = [];
+  for (const [id, v] of Object.entries(poiCache.items)) if (!pois.has(id) && Math.abs(v.la - c.lat) <= dl && Math.abs(v.ln - c.lng) <= dn) cand.push([dist({ lat: v.la, lng: v.ln }, c), id, v]);
+  cand.sort((a, b) => a[0] - b[0]);
+  for (const [, id, v] of cand.slice(0, room)) addPoi({ id, e: v.e, k: v.k, name: v.n, lat: v.la, lng: v.ln });
 }
 async function fetchPois(center) {
   poiFetching = true; if (!pois.size) { poiMsg = '🔎 近くの名所を探しています…'; updateHint(); }
   const a = `(around:${POI_RADIUS},${center.lat.toFixed(5)},${center.lng.toFixed(5)})`;
-  const q = `[out:json][timeout:12];(nw${a}["name"]["historic"];nw${a}["name"]["amenity"~"place_of_worship|public_bath|cafe|library"];` +
-    `nw${a}["name"]["leisure"~"park|garden|nature_reserve"];nw${a}["name"]["tourism"~"viewpoint|attraction|artwork|museum|gallery"];` +
-    `nw${a}["name"]["railway"="station"];);out center 100;`;
+  const q = `[out:json][timeout:15];(nwr${a}["name"]["historic"];nwr${a}["name"]["amenity"~"place_of_worship|public_bath|cafe|library"];` +
+    `nwr${a}["name"]["leisure"~"park|garden|nature_reserve"];nwr${a}["name"]["tourism"~"viewpoint|attraction|artwork|museum|gallery"];` +
+    `nwr${a}["name"]["railway"="station"];);out center 300;`;
   try {
     const data = await overpassRace(q);
     for (const el of data.elements) {
@@ -563,7 +580,11 @@ function processRegions() {                  // 地域が未取得の名所を�
         if (!next || Date.now() - regionFailAt < 15000) break;
         const f = next[1];
         try { f.region = await lookupRegion(f.lat, f.lng); registerRegion(f.region, f.quiet ? 'quiet' : true, f); persist(); regionDone++; if (regionDone % 5 === 0 && !$('book').hidden) renderBook(); }
-        catch (e) { regionFailAt = Date.now(); break; }
+        catch (e) {
+          regionFailAt = Date.now();
+          if (/no region/.test(e.message)) { f.regionFails = (f.regionFails || 0) + 1; if (f.regionFails >= 3) { f.region = { pref: '', city: '', ward: '', town: '' }; regionFailAt = 0; persist(); continue; } }      // 海の上などで何度やっても住所がない名所は、あきらめて先へ進む
+          break;
+        }
       }
     } finally { regionPromise = null; }
   })();
@@ -595,16 +616,17 @@ async function fetchCityTotal(at) {
   const n = +(c.elements.find(e => e.type === 'count')?.tags.total); if (isNaN(n)) throw new Error('no count'); return n;
 }
 let totalsPromise = null, totalFailAt = 0;
+let totalsTimer = 0;
 function processTotals() {
   if (totalsPromise) return totalsPromise;
-  if (!poiLoadedAt || poiFetching || Date.now() - poiLoadedAt < 15000) { setTimeout(processTotals, 10000); return Promise.resolve(); }      // 名所の取得を優先する(町の総数は、そのあと)
+  if (!poiLoadedAt || poiFetching || Date.now() - poiLoadedAt < 15000) { clearTimeout(totalsTimer); totalsTimer = setTimeout(processTotals, 10000); return Promise.resolve(); }      // 名所の取得を優先する(町の総数は、そのあと)
   totalsPromise = (async () => {
     try {
       while (true) {
         const e = Object.entries(save.regions.city).find(([, c]) => c.total == null && c.at);
         if (!e || Date.now() - totalFailAt < 300000) break;
         try { e[1].total = await fetchCityTotal(e[1].at); persist(); checkCityTiers(); }
-        catch (err) { totalFailAt = Date.now(); break; }
+        catch (err) { totalFailAt = Date.now(); clearTimeout(totalsTimer); totalsTimer = setTimeout(processTotals, 300000); break; }      // 失敗しても、5分後にやり直す
         await sleep(2500);
       }
     } finally { totalsPromise = null; }
@@ -621,7 +643,8 @@ function checkCityTiers() {
     const pct = Math.min(1, foundInCity(k) / c.total), reached = CITY_TIERS.filter(t => pct >= t[0] - 1e-9).length;
     for (let i = c.tier || 0; i < reached; i++) {
       const [th, gold, shards, label] = CITY_TIERS[i], name = c.city + (c.ward ? ' ' + c.ward : '');
-      setTimeout(() => { celebrate('🏙️', `${name} 達成度 ${Math.round(th * 100)}% ${label}`); toast(`${name} の名所を ${Math.round(th * 100)}% 発見！\n報酬 +${gold}🪙 +${shards}🔮`); addGold(gold); addShard(shards); persist(); }, delay);
+      addGold(gold); addShard(shards);
+      setTimeout(() => { celebrate('🏙️', `${name} 達成度 ${Math.round(th * 100)}% ${label}`); toast(`${name} の名所を ${Math.round(th * 100)}% 発見！\n報酬 +${gold}🪙 +${shards}🔮`); }, delay);
       delay += 3000;
     }
     if (reached > (c.tier || 0)) c.tier = reached;
@@ -631,8 +654,8 @@ function checkCityTiers() {
 setTimeout(processTotals, 6000);
 
 // ---- デイリーミッション: 毎日3つ(歩く・名所・ほかの行動)。全部達成でボーナス ----
-const D = () => { const t = todayStr(); if (!save.daily || save.daily.date !== t) save.daily = { date: t, coins: 0, harvest: 0, built: 0, evo: 0, claimed: {}, bonus: false }; return save.daily; };
-const foundToday = () => Object.values(save.found).filter(f => f.date === todayStr()).length;
+const D = () => { const t = todayStr(); if (save.day !== t) { save.day = t; save.today = 0; } if (!save.daily || save.daily.date !== t) save.daily = { date: t, coins: 0, harvest: 0, built: 0, evo: 0, claimed: {}, bonus: false }; return save.daily; };
+const foundToday = () => Object.values(save.found).filter(f => f.date === todayStr() && !f.quiet).length;      // 取り込みで見つけた名所は、今日の分に数えない
 const DAILY_POOL = {
   walk: [{ id: 'walk1', name: '今日、1km歩く', goal: 1000, cur: () => save.today, gold: 60, shards: 1, xp: 200 }, { id: 'walk3', name: '今日、3km歩く', goal: 3000, cur: () => save.today, gold: 160, shards: 2, xp: 500 }],
   poi: [{ id: 'poi1', name: '名所を1つ発見する', goal: 1, cur: foundToday, gold: 60, shards: 1, xp: 200 }, { id: 'poi3', name: '名所を3つ発見する', goal: 3, cur: foundToday, gold: 200, shards: 2, xp: 600 }],
@@ -653,7 +676,8 @@ function checkDaily() {
   }
   if (!d.bonus && ms.every(m => d.claimed[m.id])) {
     d.bonus = true; claimed = true;
-    setTimeout(() => { celebrate('📋', 'デイリー全達成！'); toast('デイリーミッション全達成！\nボーナス +150🪙 +3🔮'); addGold(150); addShard(3); addXp(500); persistSoon(); }, 2200);
+    addGold(150); addShard(3); addXp(500); persistSoon();
+    setTimeout(() => { celebrate('📋', 'デイリー全達成！'); toast('デイリーミッション全達成！\nボーナス +150🪙 +3🔮'); }, 2200);
   }
   if (claimed) { updateWallet(); persistSoon(); }
 }
@@ -730,7 +754,8 @@ function checkTitles() {
   for (const t of TITLES) {
     if (save.titles[t.id] || !t.ok()) continue;
     save.titles[t.id] = todayStr();
-    setTimeout(() => { addXp(150); celebrate('🏅', `称号「${t.name}」`); toast(`称号「${t.name}」を獲得！\n報酬 +${t.gold}🪙${t.shards ? ` +${t.shards}🔮` : ''}${t.unlock ? '\n解放: ' + t.unlock : ''}`); addGold(t.gold); if (t.shards) addShard(t.shards); persist(); }, delay);
+    addXp(150); addGold(t.gold); if (t.shards) addShard(t.shards);                     // 報酬は、すぐ渡して保存する(演出だけ、順番に出す)
+    setTimeout(() => { celebrate('🏅', `称号「${t.name}」`); toast(`称号「${t.name}」を獲得！\n報酬 +${t.gold}🪙${t.shards ? ` +${t.shards}🔮` : ''}${t.unlock ? '\n解放: ' + t.unlock : ''}`); }, delay);
     delay += 3000;
   }
   if (delay) persist();
@@ -788,10 +813,10 @@ function updateLevel() {
     for (let n = from + 1; n <= lv; n++) { gold += 30 + 20 * (n + 1); shards += 1 + ((n + 1) % 5 === 0 ? 3 : 0); }
     const opened = ITEMS.filter(i => i.minLv && i.minLv > from + 1 && i.minLv <= lv + 1).map(i => i.chain[0][1]);
     save.lvDone = lv;
+    addGold(gold); addShard(shards); persist();
     setTimeout(() => {
       celebrate('🎖️', `レベルアップ！ Lv.${lv + 1} ${lvName(lv)}`);
       toast(`Lv.${lv + 1} ${lvName(lv)}\n報酬 +${gold}🪙 +${shards}🔮${opened.length ? '\n解放: ' + opened.join('・') : ''}`);
-      addGold(gold); addShard(shards); persist();
     }, lastLv === null ? 1800 : 0);
   }
   lastLv = lv;
@@ -1148,11 +1173,15 @@ function openObj(o) {
   };
   $('obj').hidden = false;
 }
-// 以前の保存データを新しい形式へ
-for (const o of save.built) {
-  if (o.t === 'bench') o.t = 'rest'; else if (o.t === 'tent') { o.t = 'rest'; o.lv = 2; }
-  o.lv = o.lv || 1; o.last = o.last || Date.now(); o.days = o.days || 1; o.lastDay = o.lastDay || o.d; o.spent = o.spent || ITEM[o.t].cost;
+// 以前の保存データを新しい形式へ(旧版からの復元のあとにも、もう一度かける)
+function normalizeBuilt() {
+  save.built = save.built.filter(o => o && (o.t === 'bench' || o.t === 'tent' || ITEM[o.t]) && isFinite(o.lat) && isFinite(o.lng));      // 知らない種類・座標のこわれた物は除く
+  for (const o of save.built) {
+    if (o.t === 'bench') o.t = 'rest'; else if (o.t === 'tent') { o.t = 'rest'; o.lv = 2; }
+    o.lv = Math.min(3, Math.max(1, o.lv | 0 || 1)); o.last = o.last || Date.now(); o.days = o.days || 1; o.lastDay = o.lastDay || o.d; o.spent = o.spent || ITEM[o.t].cost;
+  }
 }
+normalizeBuilt();
 
 // ---- 冒険モード: 歩いて貯めた👣を使って、いつでも・どこでも冒険する ----
 let mode = 'real', realPos = null, advDest = null, advFlag = null, advTimer = 0;
@@ -1434,15 +1463,16 @@ async function importFileInner(file) {
   } catch (e) { return log(`⚠️ ${file.name}: ${e.message || '読み取れませんでした'}`); }
   if (!tracks.length && diagText) { $('imp-diag').value = diagText; $('imp-diag').hidden = false; }
   if (!tracks.length && firstErr) return log(`⚠️ ${file.name}: ${firstErr.message || '読み取れませんでした'}`);
+  const fpOf = new Map(); tracks.forEach(tr => { if (tr.length) fpOf.set(tr, trackFp(tr)); });      // 期間で切る前の道すじで、取り込みずみかを見分ける(期間を変えて入れ直しても二重に数えない)
+  tracks = tracks.filter(tr => tr.length);
   const days = +$('imp-range').value, totalBefore = tracks.length;      // 期間の指定(0=全期間)
-  if (days) { const cut = Date.now() - days * 864e5; tracks = tracks.map(tr => tr.filter(p => !p.t || p.t >= cut)).filter(tr => tr.length); }
+  if (days) { const cut = Date.now() - days * 864e5; tracks = tracks.map(tr => { const f = tr.filter(p => !p.t || p.t >= cut); if (f.length) fpOf.set(f, fpOf.get(tr)); return f; }).filter(tr => tr.length); }
   if (!tracks.length && totalBefore) { $('imp-range').value = '0'; return log(`ℹ️ ${file.name}: ${totalBefore}本の道すじが見つかりましたが、指定した期間(直近${days}日)の記録がありませんでした。期間を「すべて」に切り替えたので、もう一度ファイルを選んでください`); }
   if (!tracks.length) return log(`⚠️ ${file.name}: 道すじ(座標)が見つかりませんでした。下の診断を、そのままコピーして教えてください`);
-  const fresh = tracks.filter(tr => !fpSet.has(trackFp(tr)));
+  const seenFp = new Set(), fresh = tracks.filter(tr => { const fp = fpOf.get(tr); if (fpSet.has(fp) || seenFp.has(fp)) return false; seenFp.add(fp); return true; });
   if (!fresh.length) return log(`ℹ️ ${file.name} は取り込み済みです`);
   const r = buildSamples(fresh);
   if (!r.samples.length) return log(`⚠️ ${file.name}: 座標が見つかりませんでした`);
-  fresh.forEach(tr => fpSet.add(trackFp(tr))); save.importFp = [...fpSet];
   // 1. 霧・足あと・距離・👣
   const cellsBefore = explored.size;
   for (let i = 0; i < r.samples.length; i++) {
@@ -1487,7 +1517,9 @@ async function importFileInner(file) {
   updateWallet(); updateHud(); persist();
   setTimeout(processRegions, 500); setTimeout(processTotals, 1500); setTimeout(checkTitles, 800); setTimeout(checkCityTiers, 2000);
   const note = selfLog ? ' (このアプリの記録なので、距離と👣は足していません)' : r.total < 20 ? ' (ほとんど移動していない記録です)' : '';
-  const summary = `${(r.total / 1000).toFixed(1)}km ・ 霧 +${((explored.size - cellsBefore) * CELL * CELL / 1e6).toFixed(3)}km² ・ 名所 +${poiNew} ・ 新しい県 ${gain.pref} / 市区町村 ${gain.city} ・ 👣 +${selfLog ? 0 : Math.round(r.total * AP_PER_M)}${note}`;
+  fresh.forEach(tr => fpSet.add(fpOf.get(tr))); save.importFp = [...fpSet];      // 取り込みが最後まで成功してから、取り込みずみとして記録する
+  const truncated = picks.length > 120 || line.length > 720;
+  const summary = `${(r.total / 1000).toFixed(1)}km ・ 霧 +${((explored.size - cellsBefore) * CELL * CELL / 1e6).toFixed(3)}km² ・ 名所 +${poiNew} ・ 新しい県 ${gain.pref} / 市区町村 ${gain.city} ・ 👣 +${selfLog ? 0 : Math.round(r.total * AP_PER_M)}${note}${truncated ? ' ・ ※長い記録のため、地域・名所の検索は一部のみ' : ''}`;
   save.imports.unshift({ name: file.name, date: todayStr(), summary }); save.imports.length = Math.min(save.imports.length, 8); persist();
   log('✅ 取り込み完了: ' + summary); celebrate('📥', `取り込み完了！ ${(r.total / 1000).toFixed(1)}km`); renderAdvPanel();
 }
@@ -1541,8 +1573,11 @@ async function importShared() {
   const cache = await caches.open('shared-v1'), reqs = (await cache.keys()).sort((x, y) => x.url.localeCompare(y.url));
   if (!reqs.length) return $('imp-status').textContent = 'ℹ️ 共有されたファイルが見つかりませんでした';
   for (const rq of reqs) {
-    const res = await cache.match(rq), blob = await res.blob(), name = decodeURIComponent(res.headers.get('x-filename') || 'shared.gpx');
-    await cache.delete(rq); await importFile(new File([blob], name));
+    try {
+      const res = await cache.match(rq), blob = await res.blob(); let name = 'shared.gpx';
+      try { name = decodeURIComponent(res.headers.get('x-filename') || 'shared.gpx'); } catch (e) { /* 名前がこわれていても、取り込みは続ける */ }
+      await cache.delete(rq); await importFile(new File([blob], name));
+    } catch (e) { $('imp-status').textContent = '⚠️ 共有ファイルの取り込みに失敗しました: ' + (e && e.message || e); }
   }
 }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1691,7 +1726,7 @@ function renderBook() {
     const meta = new Map();
     for (const c of Object.values(save.regions.city)) { const lab = c.city + (c.ward ? ' ' + c.ward : ''); node(c.pref || '（地域不明）', lab, '—'); meta.set((c.pref || '（地域不明）') + '|' + lab, c); }   // 歩いただけの町も載せる
     for (const f of items) {
-      const r = f.region, p = r?.pref || (f.lat != null ? '（地域を取得中…）' : '（地域の記録なし）');
+      const r = f.region, p = r?.pref || (r ? '（地域不明）' : f.lat != null ? '（地域を取得中…）' : '（地域の記録なし）');
       node(p, r?.city ? r.city + (r.ward ? ' ' + r.ward : '') : '—', r?.town || '—').push(f);
     }
     const cnt = m => [...m.values()].reduce((s, v) => s + (Array.isArray(v) ? v.length : cnt(v)), 0);
@@ -1728,6 +1763,7 @@ function logPoint(lat, lng) {            // 現実のGPSの記録を、時刻つ
 }
 function updatePosition(lat, lng, accuracy, virtual) {
   const ll = { lat, lng }; me = ll;
+  if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }          // 日付が変わったら、アプリを開いたままでも、今日の距離をリセット
   if (!virtual && !debug) logPoint(lat, lng);
   if (virtual) save.adv = { lat, lng };
   if (!target) {
@@ -1741,8 +1777,8 @@ function updatePosition(lat, lng, accuracy, virtual) {
   if (!last) last = { p: ll, t: now };
   else {
     const d = dist(last.p, ll);
-    if (d >= Math.max(MIN_STEP, Math.min(accuracy || 0, 25) * 0.8)) {          // GPSの誤差より大きく動いたときだけ「動いた」と数える
-      const walking = save.speedLimit ? d / Math.max((now - last.t) / 1000, 1) <= MAX_SPEED : d <= 150000;      // 速度制限は初期状態で解除(電車・車の移動も記録)。1回で150km以上飛ぶ位置は、データの飛びとして無視
+    if (d >= Math.max(MIN_STEP, Math.min(accuracy || 0, 25) * 0.8) && !(accuracy > 50 && d < accuracy)) {      // 精度が悪い測位のゆれは、動いたと数えない          // GPSの誤差より大きく動いたときだけ「動いた」と数える
+      const el = Math.max((now - last.t) / 1000, 1), walking = save.speedLimit ? d / el <= MAX_SPEED : d <= Math.min(150000, 300 + el * 90);      // 速度制限は初期状態で解除(電車・車の移動も記録)。1回で150km以上飛ぶ位置は、データの飛びとして無視
       if (walking && !debug && !virtual) {
         if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
         save.today += d; save.total += d; save.ap += d * AP_PER_M; addStats(d);
@@ -1779,7 +1815,7 @@ function startPreview(reason) {            // GPSが取れないときは冒険�
   autoAdv = true; setMode('adventure');
   $('status').textContent = reason + ' → 冒険モードで開始 👣' + Math.floor(save.ap);
 }
-if (!navigator.geolocation) startPreview('位置情報に未対応');
+if (!navigator.geolocation) setTimeout(() => startPreview('位置情報に未対応'), 0);
 else {
   navigator.geolocation.watchPosition(onGps, gpsError, { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 });
   navigator.geolocation.watchPosition(onGps, () => {}, { enableHighAccuracy: false, maximumAge: 30000, timeout: 30000 });      // 保険: GPSが取れないときも、Wi-Fi・基地局で、おおよその位置をすばやく取る(精度が悪い測位は、よい測位があれば無視される)
@@ -1800,6 +1836,7 @@ save.coins.forEach(addCoinMarker);
     const refund = Object.values(save.city.tiles).reduce((s, t) => s + (COST[t.k] || 0), 0) + Math.floor(save.city.stock || 0);
     save.gold += refund; save.city = null; note += `街づくりで使ったコイン ${refund}🪙 をお返ししました。`;
   }
+  normalizeBuilt();
   if (note) { persist(); setTimeout(() => toast('↩️ 前のバージョンにもどしました\n' + note), 3500); }
 })();
 recalcSyn();
@@ -1811,7 +1848,7 @@ const GATE_COST = 30, MAX_GATES = 100;
 save.gates = save.gates || [];
 const gateMarkers = new Map();
 let placingGate = false;
-const cellOf = p => Math.floor(p.lat / dLat) + ',' + Math.floor(p.lng / dLng(p.lat));
+const cellOf = p => { const i = Math.floor(p.lat / dLat), w = dLng((i + 0.5) * dLat); return i + ',' + Math.floor(p.lng / w); };      // 霧のマスと同じ計算
 const visited = p => explored.has(cellOf(p));
 const gateHtml = g => `<div class="gate"><svg viewBox="0 0 64 64" width="58" height="58"><defs><radialGradient id="gg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="#9be7ff"/><stop offset="1" stop-color="#6a4bd8"/></radialGradient></defs><ellipse cx="32" cy="50" rx="24" ry="8" fill="#000" opacity=".25"/><path d="M12 52V26a20 20 0 0 1 40 0v26" fill="none" stroke="#8a7a66" stroke-width="7" stroke-linecap="round"/><path d="M12 52V26a20 20 0 0 1 40 0v26" fill="none" stroke="#c9b99f" stroke-width="3" stroke-linecap="round"/><ellipse class="gv" cx="32" cy="38" rx="14" ry="19" fill="url(#gg)"/><path class="gs" d="M32 22c8 0 12 8 6 13s-12 2-10 9" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".85"/></svg><i class="gn">${esc(g.name)}</i></div>`;
 function addGateMarker(g) { gateMarkers.set(g.id, addPin(g, '', gateHtml(g), () => openGate(g))); }
