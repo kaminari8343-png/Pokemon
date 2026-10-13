@@ -425,7 +425,33 @@ function savePoiCache() {
   try { localStorage.setItem(POI_CACHE_KEY, JSON.stringify(poiCache)); } catch (e) { /* 保存できなくても動く */ }
 }
 const nearDup = (name, lat, lng, r) => { for (const q of pois.values()) if (q.name === name && Math.abs(q.lat - lat) < 0.003 && dist(q, { lat, lng }) < r) return true; return false; };
+// 発見ずみの名所を、名前と場所でも見つける(データ元が変わって、IDが変わっても、発見ずみの印が消えないように)
+const PARKISH = /森の広場|花の庭園/;
+let fbnN = -1, fbn = new Map();
+function foundMatch(name, lat, lng, k) {
+  const keys = Object.keys(save.found);
+  if (keys.length !== fbnN) { fbnN = keys.length; fbn = new Map(); for (const id of keys) { const f = save.found[id]; if (!f || f.lat == null) continue; if (!fbn.has(f.name)) fbn.set(f.name, []); fbn.get(f.name).push(id); } }
+  const r = PARKISH.test(k || '') ? 150 : 60;
+  for (const id of fbn.get(name) || []) { const f = save.found[id]; if (f && Math.abs(f.lat - lat) < 0.003 && dist(f, { lat, lng }) < r) return id; }
+  return null;
+}
+function mergeFoundDupes() {                 // 地図の下絵から作った名所(t:…)と、すでに発見ずみの同じ名所が、二重に登録されていたら、まとめる(古い記録を残す)
+  let n = 0; save.foundMerged = save.foundMerged || [];
+  for (const id of Object.keys(save.found)) {
+    if (!id.startsWith('t:')) continue; const f = save.found[id]; if (!f || f.lat == null) continue;
+    const r = PARKISH.test(f.k || '') ? 150 : 60;
+    const twin = Object.keys(save.found).find(o => o !== id && !o.startsWith('t:') && save.found[o].name === f.name && save.found[o].lat != null && Math.abs(save.found[o].lat - f.lat) < 0.003 && dist(save.found[o], f) < r);
+    if (!twin) continue;
+    const keep = save.found[twin]; if (f.date && keep.date && f.date < keep.date) keep.date = f.date;
+    save.foundMerged.push({ id, ...f }); if (save.foundMerged.length > 300) save.foundMerged.shift();
+    delete save.found[id]; n++;
+  }
+  return n;
+}
+const mergedDupes = mergeFoundDupes(); if (mergedDupes) { persist(); setTimeout(() => toast(`🗂️ 二重に登録されていた名所を ${mergedDupes}件 まとめました\n(発見ずみの記録は、そのまま残っています)`), 4000); }
 function addPoi(p) {
+  const fk = save.found[p.id] ? p.id : foundMatch(p.name, p.lat, p.lng, p.k);
+  if (fk && fk !== p.id) p.id = fk;                                    // 発見ずみの名所と同じ場所なら、その記録として扱う
   if (pois.has(p.id) || nearDup(p.name, p.lat, p.lng, 40)) return;      // 同じ場所を、別のデータ元から二重に出さない
   p.marker = addPin(p, '', poiHtml(p, !!save.found[p.id]), () => {
     if (!me) return;
