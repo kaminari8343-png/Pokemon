@@ -397,7 +397,7 @@ const poiHtml = (p, found) => found
   ? `<div class="obj found" style="--c:${ART.poiColor(p.k)}"><span class="sp">${ART.poi(p.k, 66)}</span><div class="base"></div><span class="nm">${esc(p.name)}</span></div>`
   : `<div class="obj unk"><span class="sp">${ART.unknown(54)}</span><div class="base"></div></div>`;
 // Overpass(OpenStreetMapの無料サーバー)への問い合わせ: 時間切れつき。返事が遅いときは、少しずつ遅らせて別のサーバーにも同時に聞き、先に返った答えを使う
-function overpassRace(q, timeout = 12000, hedge = [0, 2500, 5000, 8000]) {
+function overpassRace(q, timeout = 12000, hedge = [0, 2000, 4000, 6500]) {
   return new Promise((resolve, reject) => {
     const ctrls = [], timers = []; let pending = 0, nextIdx = 0, done = false;
     const finish = (fn, v) => { if (done) return; done = true; timers.forEach(clearTimeout); ctrls.forEach(a => a.abort()); fn(v); };
@@ -424,8 +424,9 @@ function savePoiCache() {
   const ids = Object.keys(poiCache.items); if (ids.length > 4000) ids.slice(0, ids.length - 4000).forEach(k => delete poiCache.items[k]);
   try { localStorage.setItem(POI_CACHE_KEY, JSON.stringify(poiCache)); } catch (e) { /* 保存できなくても動く */ }
 }
+const nearDup = (name, lat, lng, r) => { for (const q of pois.values()) if (q.name === name && Math.abs(q.lat - lat) < 0.003 && dist(q, { lat, lng }) < r) return true; return false; };
 function addPoi(p) {
-  if (pois.has(p.id)) return;
+  if (pois.has(p.id) || nearDup(p.name, p.lat, p.lng, 40)) return;      // 同じ場所を、別のデータ元から二重に出さない
   p.marker = addPin(p, '', poiHtml(p, !!save.found[p.id]), () => {
     if (!me) return;
     if (save.found[p.id]) toast(`${p.e} ${p.name}\n${flavor(p)}`);
@@ -441,25 +442,77 @@ function showCachedPois(c) {
   cand.sort((a, b) => a[0] - b[0]);
   for (const [, id, v] of cand.slice(0, room)) addPoi({ id, e: v.e, k: v.k, name: v.n, lat: v.la, lng: v.ln });
 }
+// 地図の下絵(ベクタータイル)にも、名所のデータが入っている。すでに読み込みずみなので、通信なしで、すぐ出せる
+function poiTags(p) {                        // OpenMapTilesの「poi」→ OSMのタグ風
+  const cs = (p.class || '') + ' ' + (p.subclass || ''), t = { name: p.name, 'name:ja': p['name:ja'] };
+  if (/place_of_worship|shrine|temple|church|chapel/.test(cs)) { t.amenity = 'place_of_worship'; if (/buddhist|temple/.test(cs)) t.religion = 'buddhist'; else if (/christian|church|chapel/.test(cs)) t.religion = 'christian'; }
+  else if (/castle/.test(cs)) t.historic = 'castle';
+  else if (/monument|memorial|ruins|archaeological|historic|fort|battlefield|wayside|tomb/.test(cs)) t.historic = 'yes';
+  else if (/garden/.test(cs)) t.leisure = 'garden';
+  else if (/\bpark\b|nature_reserve/.test(cs)) t.leisure = 'park';
+  else if (/viewpoint/.test(cs)) t.tourism = 'viewpoint';
+  else if (/artwork|statue|sculpture/.test(cs)) t.tourism = 'artwork';
+  else if (/museum|gallery/.test(cs)) t.tourism = 'museum';
+  else if (/attraction|zoo|theme_park|aquarium/.test(cs)) t.tourism = 'attraction';
+  else if (/railway/.test(cs) && /station/.test(cs)) t.railway = 'station';
+  else if (/bath|spa|onsen/.test(cs)) t.amenity = 'public_bath';
+  else if (/cafe/.test(cs)) t.amenity = 'cafe';
+  else if (/library/.test(cs)) t.amenity = 'library';
+  else return null;
+  return t;
+}
+let tilePoiAt = 0;
+function addTilePois() {
+  if (!me || !map.getSource('ofm')) return 0;
+  const now = Date.now(); if (now - tilePoiAt < 3000) return 0; tilePoiAt = now;
+  let feats = []; try { feats = map.querySourceFeatures('ofm', { sourceLayer: 'poi' }).concat(map.querySourceFeatures('ofm', { sourceLayer: 'park' })); } catch (e) { return 0; }
+  let n = 0;
+  for (const f of feats) {
+    const pr = f.properties || {}, name = pr['name:ja'] || pr.name, g = f.geometry; if (!name || !g) continue;
+    let lng, lat;
+    if (g.type === 'Point') [lng, lat] = g.coordinates;
+    else if (g.type === 'Polygon' || g.type === 'MultiPolygon') { const ring = g.type === 'Polygon' ? g.coordinates[0] : g.coordinates[0][0]; if (!ring || !ring.length) continue; lng = ring.reduce((s, q) => s + q[0], 0) / ring.length; lat = ring.reduce((s, q) => s + q[1], 0) / ring.length; }
+    else continue;
+    if (Math.abs(lat - me.lat) > 0.012 || dist({ lat, lng }, me) > POI_RADIUS * 1.3) continue;
+    const t = f.sourceLayer === 'park' ? (/^(park|nature_reserve)$/.test(pr.class || '') ? { name: pr.name, 'name:ja': pr['name:ja'], leisure: pr.class } : null) : poiTags(pr);
+    const c = t && classify(t); if (!c) continue;
+    const id = 't:' + name + '@' + lat.toFixed(4) + ',' + lng.toFixed(4), before = pois.size;
+    if (pois.has(id) || nearDup(name, lat, lng, f.sourceLayer === 'park' ? 150 : 40)) continue;
+    poiCache.items[id] = { n: name, k: c.k, e: c.e, la: +lat.toFixed(6), ln: +lng.toFixed(6) };
+    addPoi({ id, e: c.e, k: c.k, name, lat, lng }); if (pois.size > before) n++;
+    if (pois.size >= 140) break;
+  }
+  if (n) { savePoiCache(); poiMsg = null; updateHint(); }
+  return n;
+}
+function poiQuery(center, r, rel, limit, to) {
+  const a = `(around:${r},${center.lat.toFixed(5)},${center.lng.toFixed(5)})`, w = rel ? 'nwr' : 'nw';
+  return `[out:json][timeout:${to}];(${w}${a}["name"]["historic"];${w}${a}["name"]["amenity"~"place_of_worship|public_bath|cafe|library"];` +
+    `${w}${a}["name"]["leisure"~"park|garden|nature_reserve"];${w}${a}["name"]["tourism"~"viewpoint|attraction|artwork|museum|gallery"];${w}${a}["name"]["railway"="station"];);out center ${limit};`;
+}
+function applyPoiData(data) {
+  for (const el of data.elements) {
+    const id = el.type + el.id, t = el.tags || {}, c = classify(t);
+    const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon;
+    if (!c || lat == null) continue;
+    const name = t['name:ja'] || t.name;
+    poiCache.items[id] = { n: name, k: c.k, e: c.e, la: +lat.toFixed(6), ln: +lng.toFixed(6) };
+    addPoi({ id, e: c.e, k: c.k, name, lat, lng });
+  }
+}
 async function fetchPois(center) {
   poiFetching = true; if (!pois.size) { poiMsg = '🔎 近くの名所を探しています…'; updateHint(); }
-  const a = `(around:${POI_RADIUS},${center.lat.toFixed(5)},${center.lng.toFixed(5)})`;
-  const q = `[out:json][timeout:15];(nwr${a}["name"]["historic"];nwr${a}["name"]["amenity"~"place_of_worship|public_bath|cafe|library"];` +
-    `nwr${a}["name"]["leisure"~"park|garden|nature_reserve"];nwr${a}["name"]["tourism"~"viewpoint|attraction|artwork|museum|gallery"];` +
-    `nwr${a}["name"]["railway"="station"];);out center 300;`;
-  try {
-    const data = await overpassRace(q);
-    for (const el of data.elements) {
-      const id = el.type + el.id, t = el.tags || {}, c = classify(t);
-      const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon;
-      if (!c || lat == null) continue;
-      const name = t['name:ja'] || t.name;
-      poiCache.items[id] = { n: name, k: c.k, e: c.e, la: +lat.toFixed(6), ln: +lng.toFixed(6) };
-      addPoi({ id, e: c.e, k: c.k, name, lat, lng });
-    }
-    poiCache.at[poiTile(center)] = Date.now(); savePoiCache();
-    poiCenter = center; poiLoadedAt = Date.now(); poiFailCount = 0; poiMsg = null;
-  } catch (e) {
+  let ok = false;
+  try {                                                                                      // 1. すばやい検索(近く450m・関係を除く)で、先に表示
+    applyPoiData(await overpassRace(poiQuery(center, 450, false, 120, 8), 9000, [0, 1500, 3000, 5000]));
+    ok = true; poiLoadedAt = Date.now(); poiMsg = null; updateHint();
+  } catch (e) { /* 次の検索へ */ }
+  try {                                                                                      // 2. ていねいな検索(全域・関係もふくむ)
+    applyPoiData(await overpassRace(poiQuery(center, POI_RADIUS, true, 300, 15)));
+    ok = true;
+  } catch (e) { /* すばやい検索の分だけでも使う */ }
+  if (ok) { poiCache.at[poiTile(center)] = Date.now(); savePoiCache(); poiCenter = center; poiLoadedAt = Date.now(); poiFailCount = 0; poiMsg = null; }
+  else {
     poiFailCount++; poiRetryAt = Date.now() + Math.min(60, 6 * 2 ** poiFailCount) * 1000;          // 失敗したら、少しずつ間をあけて自動でやり直す
     if (!pois.size) poiMsg = '⚠️ 名所を読み込めません。自動でやり直します(🔄でいますぐ更新)';
   }
@@ -473,6 +526,7 @@ function prunePois() {                       // 遠くなった名所の印は�
 function maybeFetchPois() {
   if (!me) return;
   prunePois();
+  addTilePois();                                                                                              // 地図の下絵にある名所を、通信なしで、すぐ出す
   if (poiCenter && dist(poiCenter, me) <= POI_RADIUS * 0.45) { if (!poiFetching && poiMsg && Date.now() >= poiRetryAt) { poiCenter = null; } else return; }
   showCachedPois(me);                                                                                         // 保存ずみの名所を、すぐ表示
   const fresh = poiCache.at[poiTile(me)] && Date.now() - poiCache.at[poiTile(me)] < 3 * 864e5;
@@ -481,6 +535,7 @@ function maybeFetchPois() {
   fetchPois(me);
 }
 setInterval(maybeFetchPois, 5000);
+map.on('idle', () => { tilePoiAt = 0; if (me) addTilePois(); });      // 地図の読み込みが落ち着いたら、すぐ名所を拾う
 function checkFound() {
   for (const p of pois.values()) {
     if (save.found[p.id] || dist(p, me) > FOUND_RANGE * (fxOn('scope') ? 3 : 1)) continue;
