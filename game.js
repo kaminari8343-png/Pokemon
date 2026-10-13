@@ -61,7 +61,7 @@ function buildStyle() {
     light: { anchor: 'map', color: '#fff1d6', intensity: 0.5, position: [1.2, 205, 40] },
     sources: {
       ofm: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      trail: { type: 'geojson', data: EMPTY }, place: { type: 'geojson', data: EMPTY }, roads: { type: 'geojson', data: EMPTY }, roadsyn: { type: 'geojson', data: EMPTY },
+      trail: { type: 'geojson', data: EMPTY }, place: { type: 'geojson', data: EMPTY }, acc: { type: 'geojson', data: EMPTY }, roads: { type: 'geojson', data: EMPTY }, roadsyn: { type: 'geojson', data: EMPTY },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#eadcb6' } },
@@ -112,6 +112,8 @@ function buildStyle() {
       { id: 'road-bed', type: 'line', source: 'roads', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#7d5e34', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 3, 19, 15], 'line-opacity': 0.92 } },
       { id: 'road-line', type: 'line', source: 'roads', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ecd8a8', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1.4, 19, 8.5] } },
       { id: 'road-syn', type: 'line', source: 'roadsyn', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffc83d', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1.2, 19, 4.5], 'line-dasharray': [1, 1.7], 'line-blur': 0.6 } },
+      { id: 'acc-fill', type: 'fill', source: 'acc', paint: { 'fill-color': '#6ab0ff', 'fill-opacity': 0.16 } },
+      { id: 'acc-line', type: 'line', source: 'acc', paint: { 'line-color': '#6ab0ff', 'line-width': 1.5, 'line-opacity': 0.7 } },
       { id: 'trail-glow', type: 'line', source: 'trail', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#ffd873', 'line-width': 12, 'line-blur': 7, 'line-opacity': 0.7 } },
       { id: 'trail-dots', type: 'line', source: 'trail', layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -1193,8 +1195,14 @@ function returnToReal() {                    // 現実の現在地に合わせ�
   $('real-text').textContent = '現実の現在地を取得中…';
   navigator.geolocation.getCurrentPosition(p => { onGps(p); setMode('real'); }, () => toast('現実の現在地を取得できません。位置情報の許可を確認してください'), { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
 }
+const gpsInfo = { acc: null, at: 0, n: 0, err: '', skipped: 0 };
 function onGps(p) {
-  realPos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
+  const acc = p.coords.accuracy, now = Date.now();
+  gpsInfo.acc = acc; gpsInfo.at = now; gpsInfo.n++; gpsInfo.err = '';
+  if (realPos && now - realPos.t < 60000 && acc > Math.max(150, realPos.acc * 3)) {        // 直前によい測位があるのに、急に精度が悪くなった測位は使わない(基地局ベースの大きなずれ対策)
+    gpsInfo.skipped++; if (mode === 'real' && !debug) $('status').textContent = `GPSの精度が低いため待っています (精度 ${Math.round(acc)}m)`; return;
+  }
+  realPos = { lat: p.coords.latitude, lng: p.coords.longitude, acc, t: now };
   if (mode === 'adventure') { if (autoAdv) { autoAdv = false; setMode('real'); } else updateRealGhost(); return; }   // 自動で冒険モードにした場合は、GPSが取れたら現実モードへ
   if (debug) return;
   updatePosition(realPos.lat, realPos.lng, realPos.acc);
@@ -1596,8 +1604,9 @@ map.on('click', e => {
   if (mode === 'adventure') return advGo(ll);
   if (debug) updatePosition(ll.lat, ll.lng, 0);
 });
-$('btn-locate').onclick = () => { follow = true; if (avatar) map.easeTo({ center: [avatar.lng, avatar.lat], zoom: CAM.zoom, pitch: map.getPitch(), duration: 600 }); };
+$('btn-locate').onclick = () => { follow = true; if (mode === 'real' && !debug && navigator.geolocation) { $('status').textContent = '現在地を取り直しています…'; navigator.geolocation.getCurrentPosition(p => { realPos = null; onGps(p); }, gpsError, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }); } if (avatar) map.easeTo({ center: [avatar.lng, avatar.lat], zoom: CAM.zoom, pitch: map.getPitch(), duration: 600 }); };
 $('btn-view').onclick = () => { follow = true; map.easeTo({ pitch: map.getPitch() > 20 ? 0 : CAM.pitch, bearing: 0, duration: 700 }); };
+$('status').onclick = gpsDiag;
 $('btn-debug').onclick = () => {
   debug = !debug; $('btn-debug').classList.toggle('on', debug);
   if (debug && !me) updatePosition(START.lat, START.lng, 0);
@@ -1721,6 +1730,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
     map.jumpTo({ center: [lng, lat] });
   }
   target = ll;
+  setSrc('acc', !virtual && accuracy > 25 ? circlePoly(ll, accuracy) : EMPTY);
   const now = Date.now();
   if (!last) last = { p: ll, t: now };
   else {
@@ -1747,6 +1757,17 @@ function updatePosition(lat, lng, accuracy, virtual) {
 }
 
 // ---- GPS (取れないときは東京駅からプレビュー) ----
+function gpsError(err) {                     // 1=許可なし 2=位置を特定できない 3=時間切れ(まだ探している)
+  gpsInfo.err = err.code === 1 ? 'denied' : err.code === 2 ? 'unavailable' : 'timeout';
+  if (err.code === 1) { startPreview('位置情報が許可されていません'); toast('📍 位置情報が許可されていません\nChrome のアドレス欄の🔒(設定)→「権限」→「位置情報」を許可に。端末の「位置情報(GPS)」と「正確な位置情報」もオンにしてください'); }
+  else if (err.code === 2) { if (!me) startPreview('位置を特定できません'); else $('status').textContent = '位置を特定できません(電波の良い場所へ)'; }
+  else if (!me) $('status').textContent = 'GPSを探しています…(屋外・窓の近くだと早く取れます)';
+}
+async function gpsDiag() {                   // 画面左下の状態表示をタップすると、GPSの状態を見られる
+  let perm = '不明'; try { perm = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch (e) {}
+  const age = gpsInfo.at ? Math.round((Date.now() - gpsInfo.at) / 1000) + '秒前' : 'まだ取得なし';
+  toast(`📡 GPSの状態\n許可: ${{ granted: '許可ずみ', denied: '拒否', prompt: '未確認' }[perm] || perm} ・ 精度: ${gpsInfo.acc != null ? Math.round(gpsInfo.acc) + 'm' : '-'}\n最後の取得: ${age} ・ 取得回数 ${gpsInfo.n}${gpsInfo.skipped ? ' (精度が悪く見送り ' + gpsInfo.skipped + ')' : ''}${gpsInfo.err ? '\nエラー: ' + gpsInfo.err : ''}${perm === 'denied' ? '\n→ ブラウザの設定で位置情報を許可してください' : (gpsInfo.acc > 100 ? '\n→ 精度が低いです。屋外へ出る/「正確な位置情報」をオンに' : '')}`);
+}
 function startPreview(reason) {            // GPSが取れないときは冒険モードで始める(👣貯金で、地図をタップして歩ける)
   if (me) return;
   autoAdv = true; setMode('adventure');
@@ -1754,7 +1775,7 @@ function startPreview(reason) {            // GPSが取れないときは冒険�
 }
 if (!navigator.geolocation) startPreview('位置情報に未対応');
 else {
-  navigator.geolocation.watchPosition(onGps, err => startPreview('位置情報を取得できません(' + err.message + ')'), { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+  navigator.geolocation.watchPosition(onGps, gpsError, { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) navigator.geolocation.getCurrentPosition(onGps, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }); });   // 画面に戻ったら位置を取り直す
   setTimeout(() => startPreview('位置情報の取得に時間がかかっています'), 8000);
 }

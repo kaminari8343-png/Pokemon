@@ -24,7 +24,7 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 #hint,#status,#toast{position:absolute;z-index:1000;background:rgba(24,30,44,.86);color:#f6ecd0;
   border:1px solid rgba(255,220,140,.35);padding:6px 12px;border-radius:14px;font-size:13px}
 #hint{top:116px;left:50%;transform:translateX(-50%);white-space:nowrap}
-#status{bottom:44px;left:12px;font-size:12px}
+#status{bottom:44px;left:12px;font-size:12px;pointer-events:auto;cursor:pointer}
 #toast{top:156px;left:50%;transform:translateX(-50%);font-size:15px;padding:10px 16px;max-width:85%;text-align:center;background:rgba(80,50,10,.92);white-space:pre-line}
 [hidden]{display:none!important}
 #btns{position:absolute;z-index:1000;right:12px;bottom:14px;display:flex;flex-direction:column;gap:8px}
