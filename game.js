@@ -33,7 +33,7 @@ const isNight = () => { const h = hourNow(); return h < 5 || h >= 19; };
 const KEY = 'sanpo-quest';
 let stored = {};
 try { const raw = localStorage.getItem(KEY); stored = raw ? JSON.parse(raw) : {}; if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {}; }
-catch (e) { try { localStorage.setItem(KEY + '-corrupt', localStorage.getItem(KEY)); } catch (_) {} stored = {}; }      // こわれた保存データは、別名で残して、新しく始める
+catch (e) { const rawBad = localStorage.getItem(KEY); try { localStorage.setItem(KEY + '-corrupt', rawBad); } catch (_) {} window.__corruptRaw = rawBad; stored = {}; }      // こわれた保存データは、別名で残して、新しく始める
 const DEF_STATS = { morning: 0, night: 0, rain: 0, snow: 0, hot: 0, cold: 0, dayMax: 0, streak: 0, streakDay: '' };
 const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], gates: [], fx: {}, regions: { pref: {}, city: {} }, titles: {}, xp: 0, lvDone: null, daily: null, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [], stats: DEF_STATS }, stored);
 save.stats = Object.assign({}, DEF_STATS, stored.stats || {});                      // 古い保存データに無い項目を補う
@@ -54,14 +54,46 @@ function markCell(i, j) {
 let cellsReady = false;
 for (const k of save.cells) { const [i, j] = String(k).split(',').map(Number); if (isFinite(i) && isFinite(j)) markCell(i, j); }
 cellsReady = true;
-let persistFailed = false;
+let persistFailed = false, lastLen = (localStorage.getItem(KEY) || '').length;
+let restoring = false;                       // 復元のために再読み込みするあいだは、保存しない(復元したデータを、メモリの内容で上書きしないため)
 function persist() {                         // 保存。容量がいっぱいのときは、古い記録を減らして、それでもだめなら知らせる
-  try { localStorage.setItem(KEY, JSON.stringify(save)); persistFailed = false; }
+  if (restoring) return;
+  try {
+    const s = JSON.stringify(save);
+    if (lastLen > 50000 && s.length < lastLen * 0.4) {                      // 保存データが、急に小さくなるとき: 直前の保存を、バックアップに退避してから書きかえる
+      const old = localStorage.getItem(KEY); if (old) idb().then(db => db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: old, why: '急に小さくなる前のデータ' })).catch(() => {});
+    }
+    localStorage.setItem(KEY, s); lastLen = s.length; persistFailed = false;
+  }
   catch (e) {
     try { save.log.splice(0, Math.max(0, save.log.length - 3000)); localStorage.removeItem('sanpo-poi'); localStorage.setItem(KEY, JSON.stringify(save)); }
     catch (e2) { if (!persistFailed) { persistFailed = true; try { toast('⚠️ 保存容量がいっぱいです。GPX書き出しなどで整理してください'); } catch (e3) {} } }
   }
 }
+// ---- 自動バックアップ(IndexedDB。localStorageより容量が大きい)。起動後と20分ごとに、直近3つと「いちばん大きい1つ」を残す ----
+function idb() { return new Promise((res, rej) => { try { const r = indexedDB.open('sanpo-backup', 1); r.onupgradeneeded = () => r.result.createObjectStore('snap', { keyPath: 't' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); }
+const idbAll = db => new Promise((res, rej) => { const q = db.transaction('snap').objectStore('snap').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+async function snapNow(why) {
+  try {
+    const worth = Object.keys(save.found).length + save.gates.length + save.built.length + (save.total > 2000 ? 1 : 0); if (!worth) return;
+    const db = await idb(), json = JSON.stringify(save), all = await idbAll(db);
+    const last = all.sort((a, b) => b.t - a.t)[0];
+    if (last && last.json.length === json.length && Date.now() - last.t < 3600e3) return;                  // 変化がないときは、増やさない
+    const tx = db.transaction('snap', 'readwrite'), st = tx.objectStore('snap'); st.put({ t: Date.now(), json, why: why || '' });
+    const keep = new Set(all.slice(0, 2).map(s => s.t)); const big = all.slice().sort((a, b) => b.json.length - a.json.length)[0]; if (big) keep.add(big.t);
+    for (const s of all) if (!keep.has(s.t)) st.delete(s.t);
+  } catch (e) { /* バックアップできなくても、ゲームは続ける */ }
+}
+async function offerRestore() {              // いまのデータがほぼ空で、バックアップに中身のあるものがあれば、復元を案内する
+  try {
+    if (Object.keys(save.found).length + save.gates.length + save.built.length > 0 || save.total > 2000) return;
+    const all = (await idbAll(await idb())).filter(s => { try { const o = JSON.parse(s.json); return Object.keys(o.found || {}).length + (o.gates || []).length + (o.built || []).length > 0; } catch (e) { return false; } }).sort((a, b) => b.t - a.t);
+    if (all.length && confirm(`この端末に、以前のデータのバックアップ(${new Date(all[0].t).toLocaleString('ja-JP')})が残っています。いまのデータは空です。復元しますか?`)) { restoring = true; localStorage.setItem(KEY, all[0].json); location.reload(); }
+  } catch (e) { /* なければ何もしない */ }
+}
+setTimeout(() => { if (window.__corruptRaw) idb().then(db => db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: window.__corruptRaw, why: 'こわれて読めなかったデータ' })).catch(() => {}); offerRestore(); snapNow('起動後'); }, 6000);
+setInterval(() => snapNow('自動'), 20 * 60e3);
+addEventListener('storage', e => { if (e.key === KEY && !restoring && Date.now() - (window.__lastStorageReload || 0) > 10000) { window.__lastStorageReload = Date.now(); restoring = true; location.reload(); } });      // 別の画面(復元ページなど)でデータが書きかえられたら、上書きしないで読み込み直す
 let persistTimer = 0;
 function persistSoon() { if (!persistTimer) persistTimer = setTimeout(() => { persistTimer = 0; persist(); }, explored.size > 100000 ? 10000 : 3000); }
 addEventListener('pagehide', persist);

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>データの確認と復元</title>
+<style>body{font-family:system-ui,sans-serif;background:#1b1740;color:#f6ecd0;margin:0;padding:16px;line-height:1.6}h1{font-size:20px}h2{font-size:16px;margin:18px 0 6px}
+.card{background:#f6ecd0;color:#3a2a10;border-radius:14px;padding:12px;margin-bottom:10px}.card b{font-size:15px}.card small{display:block;opacity:.8}
+button,a.btn{display:inline-block;border:0;border-radius:10px;padding:10px 14px;margin:6px 6px 0 0;background:#5b4326;color:#fff;font:inherit;font-size:14px;text-decoration:none}button.go{background:#2f7d4f}
+.note{font-size:13px;opacity:.9}.warn{background:#ffe0dc;color:#7a1f10;border-radius:10px;padding:8px;font-size:13px}</style></head><body>
+<h1>🧰 データの確認と復元</h1>
+<p class="note">この端末のブラウザに残っている、ゲームのデータ(保存・自動バックアップ)を探します。何も書きかえません。「これに戻す」を押したときだけ、いまのデータを控えたうえで入れかえます。</p>
+<div id="out">しらべています…</div>
+<p><a class="btn" href="./">ゲームにもどる</a></p>
+<script>
+const KEY = 'sanpo-quest', $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function stats(txt) {
+  try {
+    const s = JSON.parse(txt); if (!s || typeof s !== 'object') return null;
+    return { found: Object.keys(s.found || {}).length, gates: (s.gates || []).length, built: (s.built || []).length, km: Math.round((s.total || 0) / 100) / 10, gold: s.gold || 0, cells: (s.cells || []).length, titles: Object.keys(s.titles || {}).length };
+  } catch (e) { return null; }
+}
+const fmt = n => n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.round(n / 1024) + 'KB';
+const cands = [];
+function openDb() { return new Promise((res, rej) => { const r = indexedDB.open('sanpo-backup', 1); r.onupgradeneeded = () => r.result.createObjectStore('snap', { keyPath: 't' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function load() {
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith(KEY)) { const v = localStorage.getItem(k); cands.push({ label: 'ブラウザの保存: ' + k + (k === KEY ? '(いまゲームが使っているデータ)' : ''), key: k, txt: v, st: stats(v), len: v.length, cur: k === KEY }); } } } catch (e) { cands.push({ label: '読み取りエラー: ' + e.message, txt: '', st: null, len: 0 }); }
+  try { const db = await openDb(); const all = await new Promise((res, rej) => { const q = db.transaction('snap').objectStore('snap').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+    all.sort((a, b) => b.t - a.t).forEach(s => cands.push({ label: '自動バックアップ: ' + new Date(s.t).toLocaleString('ja-JP') + (s.why ? '(' + s.why + ')' : ''), txt: s.json, st: stats(s.json), len: s.json.length })); } catch (e) { /* バックアップなし */ }
+  render();
+}
+function render() {
+  const cur = cands.find(c => c.cur);
+  $('out').innerHTML = (cands.length ? '' : '<div class="warn">この端末のこのブラウザには、ゲームのデータが見つかりませんでした。ゲームを開いていたブラウザ(Chrome か、ホーム画面のアプリ)で、このページを開き直してみてください。</div>') +
+    cands.map((c, i) => `<div class="card"><b>${esc(c.label)}</b>${c.st ? `<small>名所 ${c.st.found}件 ・ ワープゲート ${c.st.gates}個 ・ 建物 ${c.st.built}個 ・ 歩いた距離 ${c.st.km}km ・ コイン ${c.st.gold} ・ 称号 ${c.st.titles} ・ 霧のマス ${c.st.cells} ・ ${fmt(c.len)}</small>` : '<small>読み取れないデータ</small>'}` +
+      `<button data-dl="${i}">ダウンロード</button>` + (c.st && !c.cur ? `<button class="go" data-rs="${i}">これに戻す</button>` : '') + '</div>').join('');
+  document.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => { const c = cands[+b.dataset.dl], a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([c.txt], { type: 'application/json' })); a.download = 'sanpo-quest-backup.json'; a.click(); });
+  document.querySelectorAll('[data-rs]').forEach(b => b.onclick = async () => {
+    const c = cands[+b.dataset.rs]; if (!c.st) return;
+    if (!confirm(`このデータ(名所 ${c.st.found}件・ゲート ${c.st.gates}個・${c.st.km}km)に戻します。いまのデータは、控えとして残します。よろしいですか?`)) return;
+    try { const now = localStorage.getItem(KEY); try { if (now) { const db = await openDb(); db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: now, why: '復元の直前のデータ' }); } } catch (e) {}
+      localStorage.setItem(KEY, c.txt); alert('戻しました。ゲームを開き直してください。'); location.href = './';
+    } catch (e) { alert('戻せませんでした: ' + e.message + '\n(保存容量がいっぱいの可能性があります。「ダウンロード」で保存してください)'); }
+  });
+}
+load();
+</script></body></html>
