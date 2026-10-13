@@ -36,7 +36,7 @@ function render() {
     const c = cands[+b.dataset.rs]; if (!c.st) return;
     if (!confirm(`このデータ(名所 ${c.st.found}件・ゲート ${c.st.gates}個・${c.st.km}km)に戻します。いまのデータは、控えとして残します。よろしいですか?`)) return;
     try { const now = localStorage.getItem(KEY); try { if (now) { const db = await openDb(); db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: now, why: '復元の直前のデータ' }); } } catch (e) {}
-      localStorage.setItem(KEY, c.txt); alert('戻しました。ゲームを開き直してください。'); location.href = './';
+      localStorage.setItem(KEY, c.txt); localStorage.setItem(KEY + '-rev', JSON.stringify({ i: 'recover-' + Date.now(), r: 1e15 })); alert('戻しました。ゲームを開き直してください。'); location.href = './';
     } catch (e) { alert('戻せませんでした: ' + e.message + '\n(保存容量がいっぱいの可能性があります。「ダウンロード」で保存してください)'); }
   });
 }

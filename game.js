@@ -33,7 +33,7 @@ const isNight = () => { const h = hourNow(); return h < 5 || h >= 19; };
 const KEY = 'sanpo-quest';
 let stored = {};
 try { const raw = localStorage.getItem(KEY); stored = raw ? JSON.parse(raw) : {}; if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {}; }
-catch (e) { const rawBad = localStorage.getItem(KEY); try { localStorage.setItem(KEY + '-corrupt', rawBad); } catch (_) {} window.__corruptRaw = rawBad; stored = {}; }      // こわれた保存データは、別名で残して、新しく始める
+catch (e) { window.__corruptRaw = localStorage.getItem(KEY); stored = {}; }      // 読めない保存データは、上書きしない(下の「persistBlocked」で、保存を止める)      // こわれた保存データは、別名で残して、新しく始める
 const DEF_STATS = { morning: 0, night: 0, rain: 0, snow: 0, hot: 0, cold: 0, dayMax: 0, streak: 0, streakDay: '' };
 const save = Object.assign({ cells: [], found: {}, trail: [], today: 0, total: 0, day: '', gold: 0, shards: 0, coins: [], built: [], gates: [], fx: {}, regions: { pref: {}, city: {} }, titles: {}, xp: 0, lvDone: null, daily: null, ap: 300, adv: null, imports: [], importFp: [], awake: true, log: [], stats: DEF_STATS }, stored);
 save.stats = Object.assign({}, DEF_STATS, stored.stats || {});                      // 古い保存データに無い項目を補う
@@ -55,19 +55,26 @@ let cellsReady = false;
 for (const k of save.cells) { const [i, j] = String(k).split(',').map(Number); if (isFinite(i) && isFinite(j)) markCell(i, j); }
 cellsReady = true;
 let persistFailed = false, lastLen = (localStorage.getItem(KEY) || '').length;
-let restoring = false;                       // 復元のために再読み込みするあいだは、保存しない(復元したデータを、メモリの内容で上書きしないため)
-function persist() {                         // 保存。容量がいっぱいのときは、古い記録を減らして、それでもだめなら知らせる
-  if (restoring) return;
+let restoring = false, persistBlocked = !!window.__corruptRaw, shrinkOK = false;      // restoring: 復元の再読み込み中は保存しない / persistBlocked: データを守るため、保存を止めている
+const INST = Math.random().toString(36).slice(2), REVKEY = KEY + '-rev';        // 複数の画面(アプリとブラウザ、タブ2つなど)で、古い内容が新しい内容を上書きしないための印
+let myRev = (() => { try { return JSON.parse(localStorage.getItem(REVKEY) || '{}').r || 0; } catch (e) { return 0; } })();
+const revConflict = () => { try { const c = JSON.parse(localStorage.getItem(REVKEY) || 'null'); return !!c && c.i !== INST && c.r > myRev; } catch (e) { return false; } };
+function persist() {                         // 保存。データを守るための確認を、ここで全部する
+  if (restoring || persistBlocked) return;
+  if (revConflict()) { restoring = true; try { toast('別の画面でデータが更新されていたので、読み込み直します'); } catch (e) {} setTimeout(() => location.reload(), 900); return; }
   try {
     const s = JSON.stringify(save);
-    if (lastLen > 50000 && s.length < lastLen * 0.4) {                      // 保存データが、急に小さくなるとき: 直前の保存を、バックアップに退避してから書きかえる
+    if (lastLen > 50000 && s.length < lastLen * 0.4 && !shrinkOK) {            // 保存データが、急に小さくなるとき: 直前の保存をバックアップに退避し、本人に確認する
       const old = localStorage.getItem(KEY); if (old) idb().then(db => db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: old, why: '急に小さくなる前のデータ' })).catch(() => {});
+      if (document.hidden || !confirm(`⚠️ 保存データが、急に小さくなります(${Math.round(lastLen / 1024)}KB → ${Math.round(s.length / 1024)}KB)。\nバグや読み込み失敗の可能性があります。\n\n「キャンセル」: 保存せず、元のデータを守る(ふつうは、こちら)\n「OK」: 小さくなってよい場合だけ`)) { persistBlocked = true; return; }
+      shrinkOK = true;
     }
     localStorage.setItem(KEY, s); lastLen = s.length; persistFailed = false;
+    myRev += 1; localStorage.setItem(REVKEY, JSON.stringify({ i: INST, r: myRev }));
   }
   catch (e) {
-    try { save.log.splice(0, Math.max(0, save.log.length - 3000)); localStorage.removeItem('sanpo-poi'); localStorage.setItem(KEY, JSON.stringify(save)); }
-    catch (e2) { if (!persistFailed) { persistFailed = true; try { toast('⚠️ 保存容量がいっぱいです。GPX書き出しなどで整理してください'); } catch (e3) {} } }
+    try { save.log.splice(0, Math.max(0, save.log.length - 3000)); localStorage.removeItem('sanpo-poi'); const s2 = JSON.stringify(save); localStorage.setItem(KEY, s2); lastLen = s2.length; }
+    catch (e2) { if (!persistFailed) { persistFailed = true; try { toast('⚠️ 保存容量がいっぱいです。🗺️パネルの「バックアップ」で書き出して、整理してください'); } catch (e3) {} } }
   }
 }
 // ---- 自動バックアップ(IndexedDB。localStorageより容量が大きい)。起動後と20分ごとに、直近3つと「いちばん大きい1つ」を残す ----
@@ -84,16 +91,31 @@ async function snapNow(why) {
     for (const s of all) if (!keep.has(s.t)) st.delete(s.t);
   } catch (e) { /* バックアップできなくても、ゲームは続ける */ }
 }
-async function offerRestore() {              // いまのデータがほぼ空で、バックアップに中身のあるものがあれば、復元を案内する
+async function offerRestore() {              // いまのデータがほぼ空で、バックアップに中身のあるものがあれば、自動で復元する(ひとつの画面で、1回だけ)
   try {
     if (Object.keys(save.found).length + save.gates.length + save.built.length > 0 || save.total > 2000) return;
+    if (sessionStorage.getItem('sanpo-autorestore')) return; sessionStorage.setItem('sanpo-autorestore', '1');
     const all = (await idbAll(await idb())).filter(s => { try { const o = JSON.parse(s.json); return Object.keys(o.found || {}).length + (o.gates || []).length + (o.built || []).length > 0; } catch (e) { return false; } }).sort((a, b) => b.t - a.t);
-    if (all.length && confirm(`この端末に、以前のデータのバックアップ(${new Date(all[0].t).toLocaleString('ja-JP')})が残っています。いまのデータは空です。復元しますか?`)) { restoring = true; localStorage.setItem(KEY, all[0].json); location.reload(); }
+    if (all.length) { restoring = true; localStorage.setItem(KEY, all[0].json); localStorage.setItem('sanpo-quest-restored', String(Date.now())); location.reload(); }
   } catch (e) { /* なければ何もしない */ }
 }
-setTimeout(() => { if (window.__corruptRaw) idb().then(db => db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: window.__corruptRaw, why: 'こわれて読めなかったデータ' })).catch(() => {}); offerRestore(); snapNow('起動後'); }, 6000);
+if (localStorage.getItem('sanpo-quest-restored')) { const t = +localStorage.getItem('sanpo-quest-restored'); localStorage.removeItem('sanpo-quest-restored'); setTimeout(() => toast(`↩️ データが空になっていたので、自動バックアップ(${new Date(t).toLocaleString('ja-JP')}ごろ)から、復元しました`), 3000); }
+function handleCorrupt() {                   // 保存データが読めなかったとき: 上書きせず、本人に選んでもらう
+  if (!window.__corruptRaw) return;
+  idb().then(db => db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: window.__corruptRaw, why: 'こわれて読めなかったデータ' })).catch(() => {});
+  setTimeout(() => {
+    if (confirm('⚠️ 保存データを読み込めませんでした。\nデータを守るため、上書きしていません(いまは保存を止めています)。\n\n「OK」: 新しく始める(読めなかったデータは、別に控えます)\n「キャンセル」: 保存せずに様子を見る。🗺️パネルの「データの確認・復元ページ」で、データを調べられます')) {
+      try { localStorage.setItem(KEY + '-corrupt', window.__corruptRaw); } catch (e) {}
+      persistBlocked = false; window.__corruptRaw = null; persist();
+    }
+  }, 2500);
+}
+handleCorrupt();
+setTimeout(() => { offerRestore(); snapNow('起動後'); }, 6000);
 setInterval(() => snapNow('自動'), 20 * 60e3);
-addEventListener('storage', e => { if (e.key === KEY && !restoring && Date.now() - (window.__lastStorageReload || 0) > 10000) { window.__lastStorageReload = Date.now(); restoring = true; location.reload(); } });      // 別の画面(復元ページなど)でデータが書きかえられたら、上書きしないで読み込み直す
+let needReload = false;
+addEventListener('storage', e => { if (e.key === REVKEY && !restoring && revConflict()) needReload = true; });      // 別の画面が、新しいデータを保存した。この画面にもどったとき、読み込み直す(古い内容で上書きしない)
+document.addEventListener('visibilitychange', () => { if (!document.hidden && needReload && !restoring) { restoring = true; location.reload(); } });
 let persistTimer = 0;
 function persistSoon() { if (!persistTimer) persistTimer = setTimeout(() => { persistTimer = 0; persist(); }, explored.size > 100000 ? 10000 : 3000); }
 addEventListener('pagehide', persist);
@@ -2031,6 +2053,7 @@ const gateHtml = g => `<div class="gate"><svg viewBox="0 0 64 64" width="58" hei
 function addGateMarker(g) { gateMarkers.set(g.id, addPin(g, '', gateHtml(g), () => openGate(g))); }
 save.gates.forEach(addGateMarker);
 if (typeof onlineInit === 'function') onlineInit();
+if (typeof backupInit === 'function') backupInit();
 function nearName(p) {
   let best = null, bd = 200;
   for (const q of pois.values()) { const d = dist(p, q); if (d < bd && save.found[q.id]) { bd = d; best = q; } }

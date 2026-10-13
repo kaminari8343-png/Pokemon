@@ -307,3 +307,38 @@ revoke all on function public.ensure_player(text), public.add_friend(text), publ
 grant execute on function public.ensure_player(text), public.add_friend(text), public.list_requests(), public.accept_friend(uuid), public.decline_request(uuid),
   public.remove_friend(uuid), public.delete_me(), public.publish_stats(numeric, int, int, int), public.publish_items(jsonb), public.list_friends(),
   public.friends_shared(), public.cheer(uuid, text), public.claim_cheers(), public.send_gift(uuid, text, int), public.claim_gifts() to authenticated;
+
+-- ===== 暗号化バックアップ(合言葉で復元。サーバーには、暗号化された中身しか置かない) =====
+create table if not exists public.backups (
+  id text primary key,
+  data text not null,
+  size int not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.backups enable row level security;
+revoke all on public.backups from anon, authenticated;
+
+create or replace function public.put_backup(p_id text, p_data text) returns json
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'ログインしていません'; end if;
+  if p_id is null or length(p_id) < 32 or length(p_id) > 128 then raise exception 'idが正しくありません'; end if;
+  if p_data is null or length(p_data) < 16 or length(p_data) > 8000000 then raise exception 'データの大きさが正しくありません'; end if;
+  insert into backups (id, data, size, updated_at) values (p_id, p_data, length(p_data), now())
+    on conflict (id) do update set data = excluded.data, size = excluded.size, updated_at = now();
+  return json_build_object('ok', true, 'size', length(p_data));
+end $$;
+
+create or replace function public.get_backup(p_id text) returns json
+language plpgsql security definer set search_path = public as $$
+declare r backups;
+begin
+  if auth.uid() is null then raise exception 'ログインしていません'; end if;
+  if p_id is null or length(p_id) < 32 or length(p_id) > 128 then return json_build_object('ok', false); end if;
+  select * into r from backups where id = p_id;
+  if not found then return json_build_object('ok', false); end if;
+  return json_build_object('ok', true, 'data', r.data, 'updated_at', r.updated_at);
+end $$;
+
+revoke all on function public.put_backup(text, text), public.get_backup(text) from public, anon;
+grant execute on function public.put_backup(text, text), public.get_backup(text) to authenticated;
