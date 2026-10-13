@@ -42,7 +42,8 @@ html,body{margin:0;height:100%;overflow:hidden;font-family:'Zen Maru Gothic',sys
 @keyframes ring{from{transform:scale(.6);opacity:1}to{transform:scale(1.7);opacity:0}}
 @keyframes bob{to{transform:translateY(-6px)}}
 .coin{position:relative;width:38px;height:46px}
-.coin .c{position:absolute;left:0;right:0;top:4px;display:block;line-height:0;animation:spin 1.6s linear infinite,hover 1.2s ease-in-out infinite alternate;filter:drop-shadow(0 0 8px #ffd873);will-change:transform}
+.coin .c{position:absolute;left:0;right:0;top:4px;display:block;line-height:0;animation:spin 1.6s linear infinite,hover 1.2s ease-in-out infinite alternate;will-change:transform}
+.coin::before{content:"";position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-22px 0 0 -24px;border-radius:50%;background:radial-gradient(circle,rgba(255,216,115,.6),rgba(255,216,115,0) 70%)}
 @keyframes spin{50%{transform:scaleX(.2)}}
 @keyframes hover{from{translate:0 0}to{translate:0 -6px}}
 .obj{position:relative;display:flex;flex-direction:column;align-items:center}
