@@ -1188,12 +1188,18 @@ function setMode(m) {
   else toast('現実の現在地を取得しています…');
   updateRealGhost(); renderAdvPanel();
 }
+function getFix(ok, fail) {                  // まず高精度(GPS)で、取れなければ低精度(Wi-Fi・基地局)で現在地を取る
+  const g = navigator.geolocation;
+  g.getCurrentPosition(ok, () => g.getCurrentPosition(ok, fail, { enableHighAccuracy: false, maximumAge: 600000, timeout: 12000 }), { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 });
+}
 function returnToReal() {                    // 現実の現在地に合わせる(どれだけ離れていても)。分かっている位置ですぐ合わせてから、最新の位置に取り直す
-  const refresh = cb => navigator.geolocation && navigator.geolocation.getCurrentPosition(onGps, cb || (() => {}), { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
-  if (realPos) { setMode('real'); refresh(); return; }
   if (!navigator.geolocation) return toast('現実の現在地を取得できません(位置情報に未対応)');
-  $('real-text').textContent = '現実の現在地を取得中…';
-  navigator.geolocation.getCurrentPosition(p => { onGps(p); setMode('real'); }, () => toast('現実の現在地を取得できません。位置情報の許可を確認してください'), { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+  if (realPos) { setMode('real'); getFix(onGps, () => {}); return; }
+  $('real-text').textContent = '現実の現在地を取得中…(最大25秒)';
+  getFix(p => { onGps(p); setMode('real'); }, err => {
+    $('real-text').textContent = '現実の現在地を取得できません。もう一度押してください';
+    toast(err && err.code === 1 ? '📍 位置情報が許可されていません\nChromeの🔒(設定)→「権限」→「位置情報」を許可に' : '📍 現在地を取得できませんでした\n端末の「位置情報」と「正確な位置情報」をオンにして、屋外・窓の近くで、もう一度押してください\n(画面左下の状態表示をタップすると、GPSの診断が見られます)');
+  });
 }
 const gpsInfo = { acc: null, at: 0, n: 0, err: '', skipped: 0 };
 function onGps(p) {
@@ -1776,6 +1782,7 @@ function startPreview(reason) {            // GPSが取れないときは冒険�
 if (!navigator.geolocation) startPreview('位置情報に未対応');
 else {
   navigator.geolocation.watchPosition(onGps, gpsError, { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 });
+  navigator.geolocation.watchPosition(onGps, () => {}, { enableHighAccuracy: false, maximumAge: 30000, timeout: 30000 });      // 保険: GPSが取れないときも、Wi-Fi・基地局で、おおよその位置をすばやく取る(精度が悪い測位は、よい測位があれば無視される)
   document.addEventListener('visibilitychange', () => { if (!document.hidden) navigator.geolocation.getCurrentPosition(onGps, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }); });   // 画面に戻ったら位置を取り直す
   setTimeout(() => startPreview('位置情報の取得に時間がかかっています'), 8000);
 }
