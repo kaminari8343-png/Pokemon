@@ -1079,7 +1079,10 @@ function floatText(text) {
   const d = document.createElement('div'); d.className = 'float'; d.textContent = text;
   d.style.left = p.x + 'px'; d.style.top = (p.y - 50) + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1200);
 }
-const updateWallet = () => { $('coins').textContent = `🪙 ${save.gold}  🔮 ${save.shards}  👣 ${Math.floor(save.ap)}  📋${Object.keys(D().claimed).length}/3`; };
+const updateWallet = () => {
+  const h = `<i class="wi">${ART.coin('coin', 20)}${save.gold}</i><i class="wi">${ART.coin('shard', 20)}${save.shards}</i><i class="wi">${ART.icon('steps', '👣', 20)}${Math.floor(save.ap)}</i><i class="wi">📋${Object.keys(D().claimed).length}/3</i>`;
+  if (updateWallet.last !== h) { updateWallet.last = h; $('coins').innerHTML = h; }          // 変わったときだけ書きかえる(ちらつき防止)
+};
 function addShard(n) { save.shards += n; updateWallet(); floatText(`${n > 0 ? '+' : ''}${n}🔮`); if (n > 0) try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} }
 function addGold(n) {
   save.gold += n; updateWallet();

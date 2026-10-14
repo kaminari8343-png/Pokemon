@@ -292,3 +292,4 @@ a.sub2{display:block;text-align:center;text-decoration:none;box-sizing:border-bo
 .evt-album small{display:block;font-size:10px;font-weight:700;line-height:1.2}.evt-album .lock span{filter:brightness(0) opacity(.35)}
 #nav .nv .ni img{width:26px;height:26px;object-fit:contain}
 #btns button img{width:26px;height:26px;object-fit:contain;margin:auto;pointer-events:none}
+#coins{display:inline-flex;align-items:center;gap:10px}#coins .wi{display:inline-flex;align-items:center;gap:3px;font-style:normal}#coins .wi img{width:20px;height:20px}
