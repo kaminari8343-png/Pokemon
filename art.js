@@ -273,7 +273,7 @@ window.ART = (function () {
       path('M16 58 L22 34 Q32 30 42 34 L48 58 Z', '#e86aa0') + path('M24 40 L40 40 L41 47 L23 47 Z', '#fff') + circ(32, 42, 1.6, '#ffd24a', false) +
       face(28) + path('M23 24 Q32 14 41 24 Q36 20 32 20 Q28 20 23 24Z', '#d9a066') +
       path('M23 19 L25 10 L29 16 L32 8 L35 16 L39 10 L41 19Z', '#ffd24a') + circ(32, 11, 1.6, '#e2574c', false) },
-    { id: 'cat', name: 'ねこ', svg: () => HG('c') +
+    { id: 'cat', name: 'ねこ', img: 'assets/hero-cat.png', svg: () => HG('c') +
       path('M42 52 Q56 50 54 38 Q54 46 44 46Z', '#f0a24a') +
       path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#5a8ad8') + path('M25 41 L39 41 L40 46 L24 46Z', '#9fc4f4') +
       circ(32, 28, 10, '#f0a24a') + poly('23,22 24,10 31,19', '#f0a24a') + poly('41,22 40,10 33,19', '#f0a24a') + poly('25,19 25.5,13 29,18', '#ffb3c8') + poly('39,19 38.5,13 35,18', '#ffb3c8') +
