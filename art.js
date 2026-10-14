@@ -243,6 +243,7 @@ window.ART = (function () {
     gem: () => glow('cn3', 32, 32, 30, '#7fd3ff', 0.7) + poly('32,57 8,27 19,9 45,9 56,27', '#6ec6ff') + poly('19,9 32,27 45,9', '#bfe8ff') + poly('8,27 32,27 32,57', '#4aa7e8') + line(8, 27, 56, 27, O, 1.4) + sparkle(50, 12, 1.3),
     shard: () => glow('cn4', 32, 32, 30, '#c9a8ff', 0.8) + poly('32,3 44,22 38,58 26,58 20,22', '#b79bff') + poly('32,3 44,22 32,26', '#e8dcff') + poly('13,34 20,28 22,58 8,58', '#9a7bf0') + sparkle(52, 14, 1.5) + sparkle(12, 18, 1.1),
   };
+  const COIN_IMG = { coin: 'assets/icon-coin.png' };      // GPTで作った絵(あるものだけ)。ない・読めないときは、SVGにもどる
   // ---- 主人公(魔法使い) ----
   const HERO = () => glow('hg', 32, 34, 30, '#ffd873', 0.35) +
     rect(46, 12, 3, 46, '#8b5a2b', 1) + circ(47.5, 11, 5, '#ffe066') + sparkle(55, 4, 1) +
@@ -316,7 +317,8 @@ window.ART = (function () {
     unknown: (px = 56) => svg(UNKNOWN(), px),
     poiColor: kind => POI_COLOR[kind] || '#ffd873',
     poiKinds: () => Object.keys(POI),
-    coin: (kind, px = 40) => svg(COIN[kind || 'coin'](), px),
+    coin: (kind, px = 40) => COIN_IMG[kind || 'coin'] ? `<img src="${COIN_IMG[kind || 'coin']}" width="${px}" height="${px}" alt="" draggable="false" style="display:block" onerror="this.outerHTML=ART.coinSvg('${kind || 'coin'}',${px})">` : svg(COIN[kind || 'coin'](), px),
+    coinSvg: (kind, px = 40) => svg(COIN[kind || 'coin'](), px),
     hero: (px = 56, id) => { const h = HEROES.find(h => h.id === id) || HEROES[0]; return h.img ? `<img src="${h.img}" width="${px}" height="${px}" alt="" draggable="false" style="display:block" onerror="this.outerHTML=ART.heroSvg('${h.id}',${px})">` : svg(h.svg(), px); },
     heroSvg: (id, px = 56) => svg((HEROES.find(h => h.id === id) || HEROES[0]).svg(), px),
     heroes: () => HEROES.map(h => ({ id: h.id, name: h.name, limited: h.limited || '' })),
