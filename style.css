@@ -269,3 +269,5 @@ a.sub2{display:block;text-align:center;text-decoration:none;box-sizing:border-bo
 #set-close,#adv-close{margin-top:6px}
 .tabs button{min-height:38px}
 #btn-debug.on{background:var(--gold)!important}
+/* メッセージは、シート(メニューなど)より手前に出す */
+#toast{z-index:3500;top:calc(60px + env(safe-area-inset-top,0px))}
