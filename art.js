@@ -253,8 +253,8 @@ window.ART = (function () {
   const HG = id => glow('hg' + id, 32, 34, 30, '#ffd873', 0.35);
   const face = (y = 28, skin = '#ffd9b8') => circ(32, y, 9, skin) + circ(28.5, y - 1, 1.4, O, false) + circ(35.5, y - 1, 1.4, O, false) + path(`M29.5 ${y + 3.5} Q32 ${y + 5.5} 34.5 ${y + 3.5}`, 'none').replace('fill="none"', 'fill="none"');
   const HEROES = [
-    { id: 'mage', name: 'まほうつかい', svg: () => HERO() },
-    { id: 'knight', name: 'けんし', svg: () => HG('k') +
+    { id: 'mage', name: 'まほうつかい', img: 'assets/hero-mage.png', svg: () => HERO() },
+    { id: 'knight', name: 'けんし', img: 'assets/hero-knight.png', svg: () => HG('k') +
       rect(14, 28, 3, 28, '#cfd8e0', 1) + poly('13.5,28 17.5,28 15.5,22', '#e8eef4') + rect(11, 40, 9, 3, '#8b5a2b', 1) +
       path('M20 58 L23 35 Q32 31 41 35 L44 58 Z', '#d9443a') + path('M26 40 L38 40 L39 47 L25 47 Z', '#f2c94c') + rect(29, 35, 6, 3, '#f2c94c', 1) +
       face(28) + path('M22 27 Q32 8 42 27 L42 22 Q32 5 22 22Z', '#9fb0c0') + rect(22, 21, 20, 5, '#b8c6d4') + rect(30, 7, 4, 8, '#e2574c', 1) },
@@ -317,7 +317,8 @@ window.ART = (function () {
     poiColor: kind => POI_COLOR[kind] || '#ffd873',
     poiKinds: () => Object.keys(POI),
     coin: (kind, px = 40) => svg(COIN[kind || 'coin'](), px),
-    hero: (px = 56, id) => svg((HEROES.find(h => h.id === id) || HEROES[0]).svg(), px),
+    hero: (px = 56, id) => { const h = HEROES.find(h => h.id === id) || HEROES[0]; return h.img ? `<img src="${h.img}" width="${px}" height="${px}" alt="" draggable="false" style="display:block" onerror="this.outerHTML=ART.heroSvg('${h.id}',${px})">` : svg(h.svg(), px); },
+    heroSvg: (id, px = 56) => svg((HEROES.find(h => h.id === id) || HEROES[0]).svg(), px),
     heroes: () => HEROES.map(h => ({ id: h.id, name: h.name, limited: h.limited || '' })),
     chest: (px = 44) => svg(CHEST(), px),
     sticker: (id, px = 56) => svg((STICKERS[id] || STICKERS.autumn)(), px),
