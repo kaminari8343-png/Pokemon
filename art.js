@@ -263,7 +263,7 @@ window.ART = (function () {
       path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#4a9a52') + rect(14, 36, 8, 14, '#a9743f') + rect(25, 41, 14, 4, '#f3d9a8', 1) +
       face(28) + circ(28.5, 27.5, 3, 'none', true).replace(/fill="none"/, 'fill="rgba(255,255,255,.25)"') + circ(35.5, 27.5, 3, 'rgba(255,255,255,.25)') +
       ell(32, 21, 16, 4.5, '#c98a4b') + path('M22 21 Q32 6 42 21Z', '#d9a066') + rect(22, 17, 20, 3, '#8a4a2a', 1) + path('M40 14 Q50 4 52 12 Q46 10 40 17Z', '#e2574c') },
-    { id: 'ninja', name: 'にんじゃ', svg: () => HG('n') +
+    { id: 'ninja', name: 'にんじゃ', img: 'assets/hero-ninja.png', svg: () => HG('n') +
       rect(10, 36, 22, 3, '#8b8b9b', 1) + line(10, 37.5, 5, 33, '#8b8b9b', 2) +
       path('M18 58 L22 35 Q32 31 42 35 L46 58 Z', '#2f3a6a') + path('M24 41 L40 41 L41 46 L23 46 Z', '#e2574c') +
       circ(32, 28, 9, '#2f3a6a') + rect(24, 24, 16, 7, '#ffd9b8', 2) + circ(28.5, 27.5, 1.3, O, false) + circ(35.5, 27.5, 1.3, O, false) +
