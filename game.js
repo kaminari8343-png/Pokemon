@@ -2072,6 +2072,7 @@ save.gates.forEach(addGateMarker);
 if (typeof onlineInit === 'function') onlineInit();
 if (typeof backupInit === 'function') backupInit();
 if (typeof eventsInit === 'function') eventsInit();
+document.querySelectorAll('[data-ico]').forEach(e => { e.innerHTML = ART.icon(e.dataset.ico, e.textContent); });      // 絵文字を、あれば絵に置きかえる
 if (!$('nav-mode-ic').firstElementChild) $('nav-mode-ic').innerHTML = ART.icon('foot', '🚶');
 function nearName(p) {
   let best = null, bd = 200;
@@ -2092,7 +2093,7 @@ function placeGateAt(ll) {
   if (save.gates.some(x => dist(x, ll) < 60)) return toast('近くにゲートがあります');
   const gt = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), lat: ll.lat, lng: ll.lng, name: nearName(ll), d: todayStr() };
   save.gates.push(gt); addGateMarker(gt); addGold(-GATE_COST); stopPlacingGate(); persist(); updateHud();
-  celebrate('🌀', `ワープゲート「${gt.name}」`); renderAdvPanel();
+  celebrate(ART.icon('gate', '🌀', 104), `ワープゲート「${gt.name}」`); renderAdvPanel();
 }
 function warpTo(gt) {
   if (mode !== 'adventure') { autoAdv = false; setMode('adventure'); }
