@@ -503,3 +503,52 @@ revoke all on function public.family_create(), public.family_join(text), public.
   public.family_report(text, int), public.family_together(text, double precision, double precision), public.family_status(text) from public, anon;
 grant execute on function public.family_create(), public.family_join(text), public.family_leave(), public.family_start(text, double precision, double precision),
   public.family_report(text, int), public.family_together(text, double precision, double precision), public.family_status(text) to authenticated;
+
+-- ===== ゲートを友だちに送る(もらう側の、ゲートリストに入る) =====
+create table if not exists public.gate_gifts (
+  id bigserial primary key,
+  from_p uuid not null references public.players(id) on delete cascade,
+  to_p uuid not null references public.players(id) on delete cascade,
+  name text not null default '',
+  lat double precision not null,
+  lng double precision not null,
+  created_at timestamptz not null default now(),
+  claimed boolean not null default false
+);
+create index if not exists gate_gifts_to_open on public.gate_gifts (to_p) where not claimed;
+create index if not exists gate_gifts_from_day on public.gate_gifts (from_p, created_at);
+alter table public.gate_gifts enable row level security;
+revoke all on public.gate_gifts from anon, authenticated;
+
+create or replace function public.send_gate(p_to uuid, p_name text, p_lat double precision, p_lng double precision) returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); sent int; pend int; nm text := left(regexp_replace(coalesce(p_name, ''), '[[:cntrl:]]', '', 'g'), 20);
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  if p_lat is null or p_lng is null or p_lat not between -90 and 90 or p_lng not between -180 and 180 then raise exception '位置が正しくありません'; end if;
+  perform 1 from players where id = uid for update;
+  if not exists (select 1 from friends where a = uid and b = p_to) then raise exception '友だちではありません'; end if;
+  select count(*) into sent from gate_gifts where from_p = uid and created_at > now() - interval '1 day';
+  if sent >= 10 then raise exception 'きょうは、もうゲートを10個送りました'; end if;
+  select count(*) into pend from gate_gifts where to_p = p_to and not claimed;
+  if pend >= 20 then raise exception 'その友だちは、まだ受け取っていないゲートがたくさんあります'; end if;
+  if exists (select 1 from gate_gifts where from_p = uid and to_p = p_to and not claimed and abs(lat - p_lat) < 0.0005 and abs(lng - p_lng) < 0.0005) then
+    return json_build_object('ok', true, 'dup', true);
+  end if;
+  insert into gate_gifts (from_p, to_p, name, lat, lng) values (uid, p_to, nm, round(p_lat::numeric, 5), round(p_lng::numeric, 5));
+  return json_build_object('ok', true);
+end $$;
+
+create or replace function public.claim_gate_gifts() returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); r json;
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  delete from gate_gifts where to_p = uid and claimed and created_at < now() - interval '30 days';
+  with u as (update gate_gifts set claimed = true where to_p = uid and not claimed returning from_p, name, lat, lng)
+  select coalesce(json_agg(json_build_object('name', u.name, 'lat', u.lat, 'lng', u.lng, 'from', p.name)), '[]'::json) into r from u left join players p on p.id = u.from_p;
+  return r;
+end $$;
+
+revoke all on function public.send_gate(uuid, text, double precision, double precision), public.claim_gate_gifts() from public, anon;
+grant execute on function public.send_gate(uuid, text, double precision, double precision), public.claim_gate_gifts() to authenticated;

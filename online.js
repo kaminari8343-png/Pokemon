@@ -44,6 +44,8 @@ async function olSync(manual) {
     olFriends = await olRpc('list_friends'); olShared = await olRpc('friends_shared'); olReqs = await olRpc('list_requests').catch(() => []);      // 古いSQLのままでも動くように
     const ch = await olRpc('claim_cheers');
     if (ch && ch.n > 0) { const g = ch.n * OL_CHEER_GOLD; addGold(g); addXp(ch.n * 20); persist(); toast(`👍 友だちが応援してくれました ×${ch.n}\n+${g}🪙`); }
+    const gg = await olRpc('claim_gate_gifts').catch(() => []);                 // 古いSQLのままでも動くように
+    if (gg && gg.length) olReceiveGates(gg);
     const gifts = await olRpc('claim_gifts');
     if (gifts && gifts.length) {
       let c = 0, s = 0; for (const x of gifts) { if (x.kind === 'coin') c += x.amount; else s += x.amount; }
@@ -54,6 +56,28 @@ async function olSync(manual) {
     if (manual && !$('book').hidden) renderBook();
   } catch (e) { olMsg = '⚠️ ' + (e.message || e); if (manual) toast('オンライン: ' + olMsg); }
   finally { olBusy = false; if (olPending) { olPending = false; setTimeout(() => olSync(), 300); } }
+}
+
+// ---- ゲートを友だちに送る / もらう ----
+async function sendGateToFriend(gt) {
+  if (!gt) return;
+  if (!olConfigured() || !olOn()) return toast('先に「記録」→「友だち」タブで、オンラインをはじめてください');
+  if (!olFriends.length) { try { await olConnect(); olFriends = await olRpc('list_friends'); } catch (e) {} }
+  if (!olFriends.length) return toast('まだ友だちがいません。「記録」→「友だち」タブで、招待コードを教え合おう');
+  const list = olFriends.map((f, i) => `${i + 1}. ${f.name}`).join('\n'), n = parseInt(prompt(`「${gt.name}」を、だれに送りますか?(番号)\n${list}`, '1'), 10);
+  const f = olFriends[n - 1]; if (!f) return;
+  try { await olConnect(); const r = await olRpc('send_gate', { p_to: f.id, p_name: gt.name, p_lat: gt.lat, p_lng: gt.lng }); toast(r && r.dup ? `📨 もう送ってあります(${f.name}さんが受け取るまで、まっています)` : `📨 ゲート「${gt.name}」を、${f.name}さんに送りました`); }
+  catch (e) { toast('送れませんでした: ' + (e.message || e)); }
+}
+function olReceiveGates(list) {
+  let add = 0, skip = 0, from = '';
+  for (const x of list) {
+    if (typeof x.lat !== 'number' || typeof x.lng !== 'number') continue;
+    if (save.gates.length >= MAX_GATES || save.gates.some(g => dist(g, x) < 60)) { skip++; continue; }       // 近くに、もうゲートがあれば、増やさない
+    const gt = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), lat: x.lat, lng: x.lng, name: String(x.name || 'もらったゲート').slice(0, 20), d: todayStr(), from: x.from || '' };
+    save.gates.push(gt); if (typeof addGateMarker === 'function') addGateMarker(gt); add++; from = x.from || from;
+  }
+  if (add || skip) { persist(); renderAdvPanel(); toast(`🌀 ${from || '友だち'}さんから、ゲートが届きました${add ? ' ×' + add : ''}${skip ? `\n(${skip}個は、近くに同じ場所があるか、上限のため入れませんでした)` : ''}`); }
 }
 
 // ---- 地図に、友だちのオブジェクト・ゲートを出す ----

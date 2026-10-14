@@ -1696,8 +1696,9 @@ function renderAdvPanel() {
   $('nav-mode-ic').innerHTML = mode === 'adventure' ? ART.icon('map', '🗺️') : ART.icon('foot', '🚶'); $('nav-mode-tx').textContent = mode === 'adventure' ? '冒険' : 'リアル';
   $('awake').checked = !!save.awake; $('awake-st').textContent = !('wakeLock' in navigator) ? '(このブラウザは未対応)' : wakeLock ? '(今: 有効)' : save.awake ? '(画面を触ると有効になります)' : '';
   $('lite').checked = isLite(); $('speedlimit').checked = !!save.speedLimit;
-  $('gate-list').innerHTML = save.gates.length ? save.gates.map(x => `<li><b>🌀 ${esc(x.name)}</b><button data-w="${x.id}">ワープ</button></li>`).join('') : '<li class="note">まだゲートがありません</li>';
+  $('gate-list').innerHTML = save.gates.length ? save.gates.map(x => `<li><b>🌀 ${esc(x.name)}</b><span class="gbtns"><button data-w="${x.id}">ワープ</button><button data-s="${x.id}" class="sub2">送る</button></span></li>`).join('') : '<li class="note">まだゲートがありません</li>';
   $('gate-list').querySelectorAll('button[data-w]').forEach(b => b.onclick = () => { $('adv').hidden = true; warpTo(save.gates.find(x => x.id === b.dataset.w)); });
+  $('gate-list').querySelectorAll('button[data-s]').forEach(b => b.onclick = () => { if (typeof sendGateToFriend === 'function') sendGateToFriend(save.gates.find(x => x.id === b.dataset.s)); });
   $('gate-add').textContent = `🌀 ゲートを置く (${GATE_COST}🪙) ${save.gates.length}/${MAX_GATES}`;
   $('imp-hist').innerHTML = save.imports.map(h => `<li><b>${esc(h.name)}</b><small>${h.date} ・ ${esc(h.summary)}</small></li>`).join('');
 }
