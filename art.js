@@ -243,7 +243,7 @@ window.ART = (function () {
     gem: () => glow('cn3', 32, 32, 30, '#7fd3ff', 0.7) + poly('32,57 8,27 19,9 45,9 56,27', '#6ec6ff') + poly('19,9 32,27 45,9', '#bfe8ff') + poly('8,27 32,27 32,57', '#4aa7e8') + line(8, 27, 56, 27, O, 1.4) + sparkle(50, 12, 1.3),
     shard: () => glow('cn4', 32, 32, 30, '#c9a8ff', 0.8) + poly('32,3 44,22 38,58 26,58 20,22', '#b79bff') + poly('32,3 44,22 32,26', '#e8dcff') + poly('13,34 20,28 22,58 8,58', '#9a7bf0') + sparkle(52, 14, 1.5) + sparkle(12, 18, 1.1),
   };
-  const ICON_IMG = { foot: 'assets/icon-foot.png', map: 'assets/icon-map.png', gate: 'assets/icon-gate.png', hammer: 'assets/icon-hammer.png', shop: 'assets/icon-shop.png', book: 'assets/icon-book.png', menu: 'assets/icon-menu.png' };      // メニューなどの小さなアイコン(GPTで作った絵。ないものは絵文字のまま)
+  const ICON_IMG = { foot: 'assets/icon-foot.png', map: 'assets/icon-map.png', gate: 'assets/icon-gate.png', hammer: 'assets/icon-hammer.png', shop: 'assets/icon-shop.png', book: 'assets/icon-book.png', menu: 'assets/icon-menu.png', refresh: 'assets/icon-refresh.png' };      // メニューなどの小さなアイコン(GPTで作った絵。ないものは絵文字のまま)
   const COIN_IMG = { coin: 'assets/icon-coin.png', gem: 'assets/icon-gem.png', bag: 'assets/icon-bag.png', shard: 'assets/icon-shard.png' };      // GPTで作った絵(あるものだけ)。ない・読めないときは、SVGにもどる
   // ---- 主人公(魔法使い) ----
   const HERO = () => glow('hg', 32, 34, 30, '#ffd873', 0.35) +

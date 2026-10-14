@@ -291,3 +291,4 @@ a.sub2{display:block;text-align:center;text-decoration:none;box-sizing:border-bo
 .evt-album{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px;text-align:center}.evt-album>div{background:#fff8e1;border:2px solid #d9c9a0;border-radius:10px;padding:4px 0}
 .evt-album small{display:block;font-size:10px;font-weight:700;line-height:1.2}.evt-album .lock span{filter:brightness(0) opacity(.35)}
 #nav .nv .ni img{width:26px;height:26px;object-fit:contain}
+#btns button img{width:26px;height:26px;object-fit:contain;margin:auto;pointer-events:none}
