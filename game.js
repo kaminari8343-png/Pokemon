@@ -49,11 +49,21 @@ let expVer = 0;
 function markCell(i, j) {
   const k = i + ',' + j;
   if (explored.has(k)) return false;
-  explored.add(k); expNum.add(numKey(i, j)); expI.push(i); expJ.push(j); expVer++; if (cellsReady) save.cells.push(k); return true;
+  explored.add(k); expNum.add(numKey(i, j)); expI.push(i); expJ.push(j); expVer++; return true;
 }
-let cellsReady = false;
+// 霧のマスは、行ごとの「連続した区間」にまとめて保存する(広い範囲を飛んでも、保存データが大きくならない)。以前の形式("i,j"の並び)も読める
 for (const k of save.cells) { const [i, j] = String(k).split(',').map(Number); if (isFinite(i) && isFinite(j)) markCell(i, j); }
-cellsReady = true;
+if (save.cellRuns && typeof save.cellRuns === 'object') for (const [i, runs] of Object.entries(save.cellRuns)) if (Array.isArray(runs)) for (let n = 0; n + 1 < runs.length; n += 2) for (let j = runs[n]; j < runs[n] + runs[n + 1]; j++) markCell(+i, j);
+save.cells = [];
+let packedVer = -1;
+function syncCells() {
+  if (packedVer === expVer && save.cellRuns) return; packedVer = expVer;
+  const rows = new Map(); for (let k = 0; k < expI.length; k++) { let r = rows.get(expI[k]); if (!r) rows.set(expI[k], r = []); r.push(expJ[k]); }
+  const out = {};
+  for (const [i, js] of rows) { js.sort((a, b) => a - b); const runs = []; let s = js[0], p = s; for (let n = 1; n < js.length; n++) { const j = js[n]; if (j === p + 1) { p = j; continue; } runs.push(s, p - s + 1); s = j; p = j; } runs.push(s, p - s + 1); out[i] = runs; }
+  save.cellRuns = out;
+}
+const saveJSON = () => { syncCells(); return JSON.stringify(save); };
 let persistFailed = false, lastLen = (localStorage.getItem(KEY) || '').length;
 let restoring = false, persistBlocked = !!window.__corruptRaw, shrinkOK = false;      // restoring: 復元の再読み込み中は保存しない / persistBlocked: データを守るため、保存を止めている
 const INST = Math.random().toString(36).slice(2), REVKEY = KEY + '-rev';        // 複数の画面(アプリとブラウザ、タブ2つなど)で、古い内容が新しい内容を上書きしないための印
@@ -63,17 +73,18 @@ function persist() {                         // 保存。データを守るた�
   if (restoring || persistBlocked) return;
   if (revConflict()) { restoring = true; try { toast('別の画面でデータが更新されていたので、読み込み直します'); } catch (e) {} setTimeout(() => location.reload(), 900); return; }
   try {
-    const s = JSON.stringify(save);
+    const s = saveJSON();
     if (lastLen > 50000 && s.length < lastLen * 0.4 && !shrinkOK) {            // 保存データが、急に小さくなるとき: 直前の保存をバックアップに退避し、本人に確認する
       const old = localStorage.getItem(KEY); if (old) idb().then(db => db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: old, why: '急に小さくなる前のデータ' })).catch(() => {});
       if (document.hidden || !confirm(`⚠️ 保存データが、急に小さくなります(${Math.round(lastLen / 1024)}KB → ${Math.round(s.length / 1024)}KB)。\nバグや読み込み失敗の可能性があります。\n\n「キャンセル」: 保存せず、元のデータを守る(ふつうは、こちら)\n「OK」: 小さくなってよい場合だけ`)) { persistBlocked = true; return; }
       shrinkOK = true;
     }
     localStorage.setItem(KEY, s); lastLen = s.length; persistFailed = false;
+    if (s.length > 3.5e6 && !window.__bigWarned) { window.__bigWarned = true; setTimeout(() => toast('💾 保存データが大きくなっています(約' + (s.length / 1e6).toFixed(1) + 'MB)\n🗺️パネルの「バックアップ」で、書き出しておきましょう'), 100); }
     myRev += 1; localStorage.setItem(REVKEY, JSON.stringify({ i: INST, r: myRev }));
   }
   catch (e) {
-    try { save.log.splice(0, Math.max(0, save.log.length - 3000)); localStorage.removeItem('sanpo-poi'); const s2 = JSON.stringify(save); localStorage.setItem(KEY, s2); lastLen = s2.length; }
+    try { save.log.splice(0, Math.max(0, save.log.length - 3000)); save.trail.splice(0, Math.max(0, save.trail.length - 3000)); localStorage.removeItem('sanpo-poi'); const s2 = saveJSON(); localStorage.setItem(KEY, s2); lastLen = s2.length; }
     catch (e2) { if (!persistFailed) { persistFailed = true; try { toast('⚠️ 保存容量がいっぱいです。🗺️パネルの「バックアップ」で書き出して、整理してください'); } catch (e3) {} } }
   }
 }
@@ -83,7 +94,7 @@ const idbAll = db => new Promise((res, rej) => { const q = db.transaction('snap'
 async function snapNow(why) {
   try {
     const worth = Object.keys(save.found).length + save.gates.length + save.built.length + (save.total > 2000 ? 1 : 0); if (!worth) return;
-    const db = await idb(), json = JSON.stringify(save), all = await idbAll(db);
+    const db = await idb(), json = saveJSON(), all = await idbAll(db);
     const last = all.sort((a, b) => b.t - a.t)[0];
     if (last && last.json.length === json.length && Date.now() - last.t < 3600e3) return;                  // 変化がないときは、増やさない
     const tx = db.transaction('snap', 'readwrite'), st = tx.objectStore('snap'); st.put({ t: Date.now(), json, why: why || '' });

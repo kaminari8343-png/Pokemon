@@ -14,7 +14,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 function stats(txt) {
   try {
     const s = JSON.parse(txt); if (!s || typeof s !== 'object') return null;
-    return { found: Object.keys(s.found || {}).length, gates: (s.gates || []).length, built: (s.built || []).length, km: Math.round((s.total || 0) / 100) / 10, gold: s.gold || 0, cells: (s.cells || []).length, titles: Object.keys(s.titles || {}).length };
+    return { found: Object.keys(s.found || {}).length, gates: (s.gates || []).length, built: (s.built || []).length, km: Math.round((s.total || 0) / 100) / 10, gold: s.gold || 0, cells: (s.cells || []).length + Object.values(s.cellRuns || {}).reduce((a, r) => a + r.filter((_, i) => i % 2).reduce((x, y) => x + y, 0), 0), titles: Object.keys(s.titles || {}).length };
   } catch (e) { return null; }
 }
 const fmt = n => n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.round(n / 1024) + 'KB';

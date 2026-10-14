@@ -31,7 +31,7 @@ async function bkSaveNow(manual) {               // クラウドへ、暗号化�
   const st = bkState(); if (!st) { if (manual) toast('先に「合言葉」を入れて、バックアップを始めてください'); return false; }
   if (typeof olConfigured !== 'function' || !olConfigured()) { if (manual) toast('クラウドバックアップは、まだ使えません(オンラインの設定が必要です)'); return false; }
   try {
-    const payload = await bkSeal(unb64(st.key), JSON.stringify(save));
+    const payload = await bkSeal(unb64(st.key), saveJSON());
     await olConnect(); await olRpc('put_backup', { p_id: st.id, p_data: payload });
     st.at = Date.now(); st.size = payload.length; localStorage.setItem(BK_KEY, JSON.stringify(st));
     if (manual) toast(`☁️ バックアップしました(${Math.round(payload.length / 1024)}KB・暗号化ずみ)`); renderBk(); return true;
@@ -63,7 +63,7 @@ async function bkApply(json, label) {            // 内容を確認して、い�
   restoring = true; localStorage.setItem(KEY, json); location.reload();
 }
 async function bkExport() {                      // ファイルに書き出し(共有シートがあれば、Googleドライブ・LINE などへ送れる)
-  const text = JSON.stringify(save), name = `sanpo-quest-backup-${todayStr()}.json`, file = new File([text], name, { type: 'application/json' });
+  const text = saveJSON(), name = `sanpo-quest-backup-${todayStr()}.json`, file = new File([text], name, { type: 'application/json' });
   try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Sanpo Quest バックアップ' }); localStorage.setItem(BK_KEY + '-file', String(Date.now())); return toast('📤 共有しました。Googleドライブなどに、保存してください'); } } catch (e) { if (e && e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; a.click(); localStorage.setItem(BK_KEY + '-file', String(Date.now())); toast('📤 ファイルを書き出しました(ダウンロードに保存)');
 }
