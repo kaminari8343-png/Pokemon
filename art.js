@@ -244,7 +244,7 @@ window.ART = (function () {
     shard: () => glow('cn4', 32, 32, 30, '#c9a8ff', 0.8) + poly('32,3 44,22 38,58 26,58 20,22', '#b79bff') + poly('32,3 44,22 32,26', '#e8dcff') + poly('13,34 20,28 22,58 8,58', '#9a7bf0') + sparkle(52, 14, 1.5) + sparkle(12, 18, 1.1),
   };
   const ICON_IMG = { foot: 'assets/icon-foot.png', map: 'assets/icon-map.png', gate: 'assets/icon-gate.png', hammer: 'assets/icon-hammer.png', shop: 'assets/icon-shop.png', book: 'assets/icon-book.png', menu: 'assets/icon-menu.png', refresh: 'assets/icon-refresh.png', steps: 'assets/icon-steps.png', locate: 'assets/icon-locate.png', compass: 'assets/icon-compass.png' };      // メニューなどの小さなアイコン(GPTで作った絵。ないものは絵文字のまま)
-  const POI_IMG = { 'ほこら': 'assets/poi-hokora.png' };      // GPTで作った名所の絵(あるものだけ)
+  const POI_IMG = { 'ほこら': 'assets/poi-hokora.png', '古刹': 'assets/poi-koshi.png' };      // GPTで作った名所の絵(あるものだけ)
   const COIN_IMG = { coin: 'assets/icon-coin.png', gem: 'assets/icon-gem.png', bag: 'assets/icon-bag.png', shard: 'assets/icon-shard.png' };      // GPTで作った絵(あるものだけ)。ない・読めないときは、SVGにもどる
   // ---- 主人公(魔法使い) ----
   const HERO = () => glow('hg', 32, 34, 30, '#ffd873', 0.35) +
