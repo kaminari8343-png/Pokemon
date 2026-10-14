@@ -1772,6 +1772,9 @@ $('app-update').onclick = updateApp;
 $('speedlimit').onchange = () => { save.speedLimit = $('speedlimit').checked; last = null; persist(); toast(save.speedLimit ? '🚶 速度制限をオン(時速43km超は記録しません)' : '🚃 速度制限を解除(乗り物の移動も記録します)'); };
 $('lite').onchange = () => { save.lite = $('lite').checked; fpsDone = true; applyLite(); persist(); };
 $('gate-add').onclick = startPlacingGate;
+$('gate-find').onclick = () => gateSearch($('gate-q').value.trim());
+$('gate-q').onkeydown = e => { if (e.key === 'Enter') gateSearch($('gate-q').value.trim()); };
+document.querySelectorAll('.gate-quick').forEach(b => b.onclick = () => { $('gate-q').value = b.dataset.q; gateSearch(b.dataset.q); });
 // 🧰 データを失ったときの、手動の復旧: 行った都道府県・市区町村を、自分で登録し直す(ボーナスなし。名所や距離は、取りもどせません)
 $('restore-regions').onclick = () => {
   $('adv').hidden = true;
@@ -2085,6 +2088,27 @@ function placeGateAt(ll) {
   const gt = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), lat: ll.lat, lng: ll.lng, name: nearName(ll), d: todayStr() };
   save.gates.push(gt); addGateMarker(gt); addGold(-GATE_COST); stopPlacingGate(); persist(); updateHud();
   celebrate('🌀', `ワープゲート「${gt.name}」`); renderAdvPanel();
+}
+// 🔎 名前(駅・名所など)で探して、その場所にゲートを置く。行ったことがなくても置ける(データを失ったときの復旧用なので、コインはかからない)
+async function searchPlaces(q) {
+  const wait = Math.max(0, nomiAt + 1200 - Date.now()); nomiAt = Date.now() + wait; if (wait) await sleep(wait);
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&countrycodes=jp&accept-language=ja&q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw new Error('検索できませんでした(' + res.status + ')');
+  return (await res.json()).map(r => { const a = r.address || {}; return { name: (r.name || r.display_name.split(',')[0]).trim(), where: [a.state, a.city || a.town || a.village || a.county, a.suburb || a.city_district].filter(Boolean).join(' '), lat: +r.lat, lng: +r.lon, type: r.type }; });
+}
+function addGateFree(p) {
+  if (save.gates.length >= MAX_GATES) return toast(`ゲートは${MAX_GATES}個までです`);
+  if (save.gates.some(x => dist(x, p) < 60)) return toast('近くに、すでにゲートがあります');
+  const gt = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), lat: p.lat, lng: p.lng, name: p.name, d: todayStr() };
+  save.gates.push(gt); addGateMarker(gt); persist(); renderAdvPanel(); celebrate('🌀', `ワープゲート「${gt.name}」`);
+}
+async function gateSearch(q) {
+  const box = $('gate-results'); if (!q) return; box.innerHTML = '<li class="note">探しています…</li>';
+  try {
+    const list = await searchPlaces(q);
+    box.innerHTML = list.length ? list.map((r, i) => `<li><b>${esc(r.name)}<small>${esc(r.where)}</small></b><button data-i="${i}">置く</button></li>`).join('') : '<li class="note">見つかりませんでした。駅名は「西尾駅」のように、市や県の名前を足してみてください</li>';
+    box.querySelectorAll('button[data-i]').forEach(b => b.onclick = () => { addGateFree(list[+b.dataset.i]); b.disabled = true; b.textContent = '置いた'; });
+  } catch (e) { box.innerHTML = `<li class="note">⚠️ ${esc(e.message || e)}</li>`; }
 }
 function warpTo(gt) {
   if (mode !== 'adventure') { autoAdv = false; setMode('adventure'); }
