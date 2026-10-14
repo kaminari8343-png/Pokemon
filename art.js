@@ -283,7 +283,7 @@ window.ART = (function () {
       rect(19, 33, 26, 22, '#9fb0c8') + rect(25, 39, 14, 9, '#6ec6ff', 2) + circ(29, 43.5, 1.6, '#fff', false) + circ(35, 43.5, 1.6, '#fff', false) +
       rect(12, 34, 7, 16, '#8a9ab0', 3) + rect(45, 34, 7, 16, '#8a9ab0', 3) + rect(23, 55, 7, 4, '#6a7a90', 1) + rect(34, 55, 7, 4, '#6a7a90', 1) +
       rect(22, 14, 20, 17, '#b8c6d8', 4) + rect(25, 19, 14, 7, '#2f3a6a', 2) + circ(29, 22.5, 1.8, '#6fffb0', false) + circ(35, 22.5, 1.8, '#6fffb0', false) },
-    { id: 'fox', name: 'きつねの子', limited: '秋の宝さがし', svg: () => HG('f') +
+    { id: 'fox', name: 'きつねの子', limited: '秋の宝さがし', img: 'assets/hero-fox.png', svg: () => HG('f') +
       path('M44 54 Q60 52 58 36 Q56 46 44 46Z', '#f08a3a') + path('M55 40 Q58 38 58 36 Q56 40 52 42Z', '#fff') +
       path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#4a9a52') + path('M24 36 L40 36 L38 42 L26 42Z', '#7fcf6a') + circ(32, 40.5, 1.6, '#ffd24a', false) +
       circ(32, 28, 10, '#f08a3a') + poly('22,22 22,9 30,18', '#f08a3a') + poly('42,22 42,9 34,18', '#f08a3a') + poly('24,19 24,13 28,18', '#fff') + poly('40,19 40,13 36,18', '#fff') +
