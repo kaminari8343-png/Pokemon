@@ -258,7 +258,7 @@ window.ART = (function () {
       rect(14, 28, 3, 28, '#cfd8e0', 1) + poly('13.5,28 17.5,28 15.5,22', '#e8eef4') + rect(11, 40, 9, 3, '#8b5a2b', 1) +
       path('M20 58 L23 35 Q32 31 41 35 L44 58 Z', '#d9443a') + path('M26 40 L38 40 L39 47 L25 47 Z', '#f2c94c') + rect(29, 35, 6, 3, '#f2c94c', 1) +
       face(28) + path('M22 27 Q32 8 42 27 L42 22 Q32 5 22 22Z', '#9fb0c0') + rect(22, 21, 20, 5, '#b8c6d4') + rect(30, 7, 4, 8, '#e2574c', 1) },
-    { id: 'explorer', name: 'たんけんか', svg: () => HG('e') +
+    { id: 'explorer', name: 'たんけんか', img: 'assets/hero-explorer.png', svg: () => HG('e') +
       rect(46, 10, 3, 48, '#8b5a2b', 1) + poly('49,10 61,15 49,20', '#e2574c') +
       path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#4a9a52') + rect(14, 36, 8, 14, '#a9743f') + rect(25, 41, 14, 4, '#f3d9a8', 1) +
       face(28) + circ(28.5, 27.5, 3, 'none', true).replace(/fill="none"/, 'fill="rgba(255,255,255,.25)"') + circ(35.5, 27.5, 3, 'rgba(255,255,255,.25)') +
