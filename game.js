@@ -80,12 +80,12 @@ function persist() {                         // 保存。データを守るた�
       shrinkOK = true;
     }
     localStorage.setItem(KEY, s); lastLen = s.length; persistFailed = false;
-    if (s.length > 3.5e6 && !window.__bigWarned) { window.__bigWarned = true; setTimeout(() => toast('💾 保存データが大きくなっています(約' + (s.length / 1e6).toFixed(1) + 'MB)\n🗺️パネルの「バックアップ」で、書き出しておきましょう'), 100); }
+    if (s.length > 3.5e6 && !window.__bigWarned) { window.__bigWarned = true; setTimeout(() => toast('💾 保存データが大きくなっています(約' + (s.length / 1e6).toFixed(1) + 'MB)\n☰メニューの「バックアップ」で、書き出しておきましょう'), 100); }
     myRev += 1; localStorage.setItem(REVKEY, JSON.stringify({ i: INST, r: myRev }));
   }
   catch (e) {
     try { save.log.splice(0, Math.max(0, save.log.length - 3000)); save.trail.splice(0, Math.max(0, save.trail.length - 3000)); localStorage.removeItem('sanpo-poi'); const s2 = saveJSON(); localStorage.setItem(KEY, s2); lastLen = s2.length; }
-    catch (e2) { if (!persistFailed) { persistFailed = true; try { toast('⚠️ 保存容量がいっぱいです。🗺️パネルの「バックアップ」で書き出して、整理してください'); } catch (e3) {} } }
+    catch (e2) { if (!persistFailed) { persistFailed = true; try { toast('⚠️ 保存容量がいっぱいです。☰メニューの「バックアップ」で書き出して、整理してください'); } catch (e3) {} } }
   }
 }
 // ---- 自動バックアップ(IndexedDB。localStorageより容量が大きい)。起動後と20分ごとに、直近3つと「いちばん大きい1つ」を残す ----
@@ -115,7 +115,7 @@ function handleCorrupt() {                   // 保存データが読めなか�
   if (!window.__corruptRaw) return;
   idb().then(db => db.transaction('snap', 'readwrite').objectStore('snap').put({ t: Date.now(), json: window.__corruptRaw, why: 'こわれて読めなかったデータ' })).catch(() => {});
   setTimeout(() => {
-    if (confirm('⚠️ 保存データを読み込めませんでした。\nデータを守るため、上書きしていません(いまは保存を止めています)。\n\n「OK」: 新しく始める(読めなかったデータは、別に控えます)\n「キャンセル」: 保存せずに様子を見る。🗺️パネルの「データの確認・復元ページ」で、データを調べられます')) {
+    if (confirm('⚠️ 保存データを読み込めませんでした。\nデータを守るため、上書きしていません(いまは保存を止めています)。\n\n「OK」: 新しく始める(読めなかったデータは、別に控えます)\n「キャンセル」: 保存せずに様子を見る。☰メニューの「データの確認・復元ページ」で、データを調べられます')) {
       try { localStorage.setItem(KEY + '-corrupt', window.__corruptRaw); } catch (e) {}
       persistBlocked = false; window.__corruptRaw = null; persist();
     }
@@ -1688,7 +1688,8 @@ function renderAdvPanel() {
   $('hero-pick').innerHTML = ART.heroes().map(h => `<button data-h="${h.id}" class="${h.id === heroId() ? 'on' : ''}">${ART.hero(52, h.id)}<small>${h.name}</small></button>`).join('');
   $('hero-pick').querySelectorAll('button').forEach(b => b.onclick = () => { save.hero = b.dataset.h; persist(); refreshHero(); renderAdvPanel(); toast(`👤 キャラクターを「${ART.heroes().find(h => h.id === save.hero).name}」にしました`); });
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
-  $('adv-toggle').textContent = mode === 'adventure' ? '現実モードにもどる(GPSで歩く)' : '冒険モードにする';
+  $('adv-toggle').textContent = mode === 'adventure' ? '🚶 現実モードにもどる(GPSで歩く)' : '🗺️ 冒険モードにする';
+  $('nav-mode-ic').textContent = mode === 'adventure' ? '🗺️' : '🚶'; $('nav-mode-tx').textContent = mode === 'adventure' ? '冒険' : 'リアル';
   $('awake').checked = !!save.awake; $('awake-st').textContent = !('wakeLock' in navigator) ? '(このブラウザは未対応)' : wakeLock ? '(今: 有効)' : save.awake ? '(画面を触ると有効になります)' : '';
   $('lite').checked = isLite(); $('speedlimit').checked = !!save.speedLimit;
   $('gate-list').innerHTML = save.gates.length ? save.gates.map(x => `<li><b>🌀 ${esc(x.name)}</b><button data-w="${x.id}">ワープ</button></li>`).join('') : '<li class="note">まだゲートがありません</li>';
@@ -1726,8 +1727,8 @@ $('awake').onchange = e => setAwake(e.target.checked);
 async function importShared() {
   const m = /[?&]shared=([^&]*)/.exec(location.search); if (!m) return;
   history.replaceState(null, '', location.pathname + location.search.replace(/([?&])shared=[^&]*&?/, '$1').replace(/[?&]$/, '') + location.hash);
-  renderAdvPanel(); $('adv').hidden = false;
-  if (m[1] === 'err' || !('caches' in window)) return $('imp-status').textContent = '⚠️ 共有されたファイルを受け取れませんでした。🗺️のボタンから、ファイルを選んで取り込んでください';
+  renderAdvPanel(); $('settings').hidden = false;
+  if (m[1] === 'err' || !('caches' in window)) return $('imp-status').textContent = '⚠️ 共有されたファイルを受け取れませんでした。☰メニューから、ファイルを選んで取り込んでください';
   const cache = await caches.open('shared-v1'), reqs = (await cache.keys()).sort((x, y) => x.url.localeCompare(y.url));
   if (!reqs.length) return $('imp-status').textContent = 'ℹ️ 共有されたファイルが見つかりませんでした';
   for (const rq of reqs) {
@@ -1740,8 +1741,12 @@ async function importShared() {
 }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 setTimeout(importShared, 2500);
-$('btn-adv').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
+$('btn-adv').onclick = () => { if (mode === 'adventure') returnToReal(); else { autoAdv = false; setMode('adventure'); } };      // 下のバーの「リアル/冒険」: 1タップで切り替え
+$('btn-gate').onclick = () => { renderAdvPanel(); $('adv').hidden = false; };
+$('btn-menu').onclick = () => { renderAdvPanel(); $('settings').hidden = false; };
 $('adv-close').onclick = () => { $('adv').hidden = true; };
+$('set-close').onclick = () => { $('settings').hidden = true; };
+for (const id of ['adv', 'settings', 'shop', 'build', 'obj', 'book']) $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).hidden = true; });      // 暗い所をタップで閉じる
 // 🔄 更新: 名所・地域・天気をいますぐ取り直す(長押し / パネルのボタンで、アプリ自体を最新版に入れ替え)
 async function refreshData() {
   const b = $('btn-refresh'); if (b.classList.contains('spin')) return;
@@ -1774,7 +1779,7 @@ $('lite').onchange = () => { save.lite = $('lite').checked; fpsDone = true; appl
 $('gate-add').onclick = startPlacingGate;
 // 🧰 データを失ったときの、手動の復旧: 行った都道府県・市区町村を、自分で登録し直す(ボーナスなし。名所や距離は、取りもどせません)
 $('restore-regions').onclick = () => {
-  $('adv').hidden = true;
+  $('settings').hidden = true;
   $('obj-title').innerHTML = '<span class="ic">🧰</span>行った場所を登録しなおす';
   $('obj-sub').innerHTML = `<div>行ったことのある都道府県にチェックを入れてください(日本地図が塗られます)。ボーナスは出ません。</div><div class="prefgrid">${PREFS.map((p, i) => `<label><input type="checkbox" data-p="${i}" ${save.regions.pref[p[0]] ? 'checked disabled' : ''}>${p[0].replace(/[都道府県]$/, '')}</label>`).join('')}</div>` +
     `<div>行った市区町村も、1行ずつ「県名 市名」で書けます(例: 神奈川県 鎌倉市)</div><textarea id="rr-cities" rows="4" placeholder="愛知県 名古屋市&#10;大阪府 大阪市 北区"></textarea>`;

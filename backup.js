@@ -88,6 +88,6 @@ function backupInit() {
   setTimeout(() => { const st = bkState(); if (st && bkWorth() && Date.now() - (st.at || 0) > BK_EVERY) bkSaveNow(false); }, 30000);
   setTimeout(() => {                             // バックアップが、長くないときは、お知らせ
     const lastFile = +(localStorage.getItem(BK_KEY + '-file') || 0), lastCloud = (bkState() || {}).at || 0, rem = +(localStorage.getItem(BK_KEY + '-remind') || 0);
-    if (bkWorth() && Date.now() - Math.max(lastFile, lastCloud) > 7 * 864e5 && Date.now() - rem > 864e5) { localStorage.setItem(BK_KEY + '-remind', String(Date.now())); toast('💾 バックアップが、7日以上ありません\n🗺️パネルの「バックアップ」から、保存してください'); }
+    if (bkWorth() && Date.now() - Math.max(lastFile, lastCloud) > 7 * 864e5 && Date.now() - rem > 864e5) { localStorage.setItem(BK_KEY + '-remind', String(Date.now())); toast('💾 バックアップが、7日以上ありません\n☰メニューの「バックアップ」から、保存してください'); }
   }, 25000);
 }

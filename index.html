@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=53">
+<link rel="stylesheet" href="style.css?v=54">
 </head>
 <body>
 <div id="map"></div>
@@ -31,20 +31,23 @@
 <div id="realbar" hidden><span id="real-text"></span><button id="real-go">現実の現在地へ戻る</button></div>
 <div id="status">位置情報を取得中…</div>
 <div id="btns">
-  <button id="btn-adv" title="冒険モード・取り込み">🗺️</button>
   <button id="btn-view" title="見下ろし/斜め">🧭</button>
-  <button id="btn-shop" title="ショップ">🛍️</button>
-  <button id="btn-build" title="つくる">🔨</button>
-  <button id="btn-book" title="冒険の書">📖</button>
+  <button id="btn-locate" title="現在地へ(位置を取り直す)">📍</button>
   <button id="btn-refresh" title="更新(長押しでアプリを最新版に)">🔄</button>
-  <button id="btn-locate" title="現在地へ">📍</button>
-  <button id="btn-debug" title="テスト移動">🧪</button>
 </div>
 <div id="placebar" hidden>
   <span id="place-text"></span>
   <button id="place-here">足もとに置く</button>
   <button id="place-cancel">やめる</button>
 </div>
+<nav id="nav">
+  <button id="btn-adv" class="nv"><span class="ni" id="nav-mode-ic">🚶</span><span id="nav-mode-tx">リアル</span></button>
+  <button id="btn-gate" class="nv"><span class="ni">🌀</span>ゲート</button>
+  <button id="btn-build" class="nv"><span class="ni">🔨</span>つくる</button>
+  <button id="btn-shop" class="nv"><span class="ni">🛍️</span>ショップ</button>
+  <button id="btn-book" class="nv"><span class="ni">📖</span>記録</button>
+  <button id="btn-menu" class="nv"><span class="ni">☰</span>メニュー</button>
+</nav>
 <section id="shop" hidden>
   <div class="card">
     <h2>🛍️ ショップ <small id="shop-gold"></small></h2>
@@ -74,49 +77,62 @@
 </section>
 <section id="adv" hidden>
   <div class="card">
-    <h2>🗺️ 冒険モード</h2>
-    <div id="adv-ap"></div>
-    <p class="note">歩いた距離は 👣 として貯まります(10mで1)。冒険モードでは、現実の場所に関係なく、地図をタップした場所へ👣を使って歩いて行けます(10mで1)。霧・コイン・名所は進みますが、「歩いた距離」には数えません。</p>
-    <button id="adv-toggle"></button>
-    <label class="awake"><input id="awake" type="checkbox"> 🔆 ゲーム中は画面をつけたままにする <small id="awake-st"></small></label>
-    <label class="awake"><input id="speedlimit" type="checkbox"> 🚶 速度制限(時速43km超は、歩いた距離に数えない) <small>オフだと、電車・車の移動も記録します</small></label>
-    <label class="awake"><input id="lite" type="checkbox"> ⚡ かるいモード(重いとき) <small>飾り・アニメ・3D建物をやめて軽くします</small></label>
-    <button id="app-update" class="sub2">🔄 アプリを最新版に更新する</button>
-    <h3>⚙️ 👣の設定</h3>
-    <p class="note">冒険モードで使う👣を、自分で付与できます(個人アプリ用の設定)。</p>
-    <div class="apset"><input id="ap-amount" type="number" inputmode="numeric" min="0" max="10000000" step="100" value="1000"><span>👣</span></div>
-    <div class="apset"><button id="ap-add" class="sub2">加算する</button><button id="ap-set" class="sub2">この数にする</button></div>
-    <div class="apset"><button class="sub2 apq" data-n="1000">+1,000</button><button class="sub2 apq" data-n="10000">+10,000</button><button class="sub2 apq" data-n="100000">+100,000</button></div>
-    <h3>👤 キャラクター</h3>
-    <div id="hero-pick" class="heropick"></div>
+    <h2>🌀 ゲート・冒険モード</h2>
+    <div class="modebox">
+      <div id="adv-ap"></div>
+      <button id="adv-toggle"></button>
+      <p class="note">歩いた距離は 👣 として貯まります(10mで1)。冒険モードでは、現実の場所に関係なく、地図をタップした場所へ👣を使って歩いて行けます(10mで1)。霧・コイン・名所は進みますが、「歩いた距離」には数えません。画面下の「リアル/冒険」ボタンでも、切り替えられます。</p>
+    </div>
     <h3>🌀 ワープゲート</h3>
     <p class="note">行ったことのある場所(霧が晴れた所)にゲートを置くと、冒険モードで、どこからでも一瞬でそこへ飛べます。地図のゲートをタップしてもOK。</p>
+    <button id="gate-add" class="sub2 prim"></button>
     <ul id="gate-list" class="gates"></ul>
-    <button id="gate-add" class="sub2"></button>
-    <h3>📥 GPSログの取り込み</h3>
-    <p class="note">GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴(JSON・Takeout の ZIP)に対応。形式が分からないJSONでも、座標らしい値を探して読み取ります。歩いた道の霧が晴れ、通った県・市区町村、道すじ沿いの名所も記録され、距離が👣になります。速度の制限はなく、電車や車の移動も、記録のとおりに反映されます。</p>
-    <p class="note">💡 ホーム画面に「インストール」しておくと、GPSLoggerなどのアプリで、GPXを「共有」→「Sanpo Quest」を選ぶだけで取り込めます。</p>
-    <label class="rangesel">取り込む期間 <select id="imp-range"><option value="0" selected>すべて</option><option value="365">直近1年</option><option value="90">直近3か月</option><option value="30">直近1か月</option><option value="7">直近1週間</option></select></label>
-    <label class="filebtn">ファイルを選ぶ(どの種類でも選べます)<input id="imp-file" type="file" multiple></label>
-    <div id="imp-status"></div>
-    <textarea id="imp-diag" rows="7" readonly hidden></textarea>
-    <details class="paste"><summary>ファイルが選べないとき: 中身を貼り付けて取り込む</summary>
-      <textarea id="imp-paste" rows="4" placeholder="GPX・JSON・CSVの中身をここに貼り付け"></textarea>
-      <button id="imp-paste-go" class="sub2">貼り付けた内容を取り込む</button>
-    </details>
-    <ul id="imp-hist"></ul>
-    <h3>💾 バックアップ(データが消えないように)</h3>
-    <p class="note">データは、この端末のブラウザの中にあります。ブラウザの都合で消えることがあるので、端末の外にも、保存しておきましょう。</p>
-    <input id="bk-pass" type="password" autocomplete="off" placeholder="合言葉(10文字以上・忘れないで)" class="bkpass">
-    <div class="apset"><button id="bk-start" class="sub2"></button><button id="bk-now" class="sub2">今すぐ</button></div>
-    <button id="bk-restore" class="sub2">☁️ 合言葉で、クラウドから復元する</button>
-    <p class="note" id="bk-status"></p>
-    <button id="bk-export" class="sub2">📤 ファイルに書き出す(Googleドライブ・LINEなどへ)</button>
-    <label class="sub2 filebtn">📥 ファイルから復元する<input id="bk-import" type="file" accept=".json,application/json" hidden></label>
-    <a id="open-recover" class="sub2" href="recover.html">🧰 データの確認・復元ページを開く(アプリの中で開きます)</a>
-    <button id="restore-regions" class="sub2">🧰 行った場所(都道府県・市区町村)を登録しなおす</button>
-    <button id="adv-export" class="sub2">このアプリの足あとをGPXで書き出す</button>
     <button id="adv-close" class="sub2">閉じる</button>
+  </div>
+</section>
+<section id="settings" hidden>
+  <div class="card">
+    <h2>☰ メニュー・設定</h2>
+    <details class="acc" open><summary>👤 キャラクター</summary><div class="accb"><div id="hero-pick" class="heropick"></div></div></details>
+    <details class="acc"><summary>⚙️ 動作の設定</summary><div class="accb">
+      <label class="awake"><input id="awake" type="checkbox"> 🔆 ゲーム中は画面をつけたままにする <small id="awake-st"></small></label>
+      <label class="awake"><input id="speedlimit" type="checkbox"> 🚶 速度制限(時速43km超は、歩いた距離に数えない) <small>オフだと、電車・車の移動も記録します</small></label>
+      <label class="awake"><input id="lite" type="checkbox"> ⚡ かるいモード(重いとき) <small>飾り・アニメ・3D建物をやめて軽くします</small></label>
+      <button id="app-update" class="sub2">🔄 アプリを最新版に更新する</button>
+      <button id="btn-debug" class="sub2">🧪 テスト移動(地図タップで移動)</button>
+    </div></details>
+    <details class="acc"><summary>👣 冒険用の👣を付与</summary><div class="accb">
+      <p class="note">冒険モードで使う👣を、自分で付与できます(個人アプリ用の設定)。</p>
+      <div class="apset"><input id="ap-amount" type="number" inputmode="numeric" min="0" max="10000000" step="100" value="1000"><span>👣</span></div>
+      <div class="apset"><button id="ap-add" class="sub2">加算する</button><button id="ap-set" class="sub2">この数にする</button></div>
+      <div class="apset"><button class="sub2 apq" data-n="1000">+1,000</button><button class="sub2 apq" data-n="10000">+10,000</button><button class="sub2 apq" data-n="100000">+100,000</button></div>
+    </div></details>
+    <details class="acc"><summary>💾 バックアップ・復元</summary><div class="accb">
+      <p class="note">データは、この端末のブラウザの中にあります。ブラウザの都合で消えることがあるので、端末の外にも、保存しておきましょう。</p>
+      <input id="bk-pass" type="password" autocomplete="off" placeholder="合言葉(10文字以上・忘れないで)" class="bkpass">
+      <div class="apset"><button id="bk-start" class="sub2"></button><button id="bk-now" class="sub2">今すぐ</button></div>
+      <button id="bk-restore" class="sub2">☁️ 合言葉で、クラウドから復元する</button>
+      <p class="note" id="bk-status"></p>
+      <button id="bk-export" class="sub2">📤 ファイルに書き出す(Googleドライブ・LINEなどへ)</button>
+      <label class="sub2 filebtn">📥 ファイルから復元する<input id="bk-import" type="file" accept=".json,application/json" hidden></label>
+      <a id="open-recover" class="sub2" href="recover.html">🧰 データの確認・復元ページを開く(アプリの中で開きます)</a>
+      <button id="restore-regions" class="sub2">🧰 行った場所(都道府県・市区町村)を登録しなおす</button>
+    </div></details>
+    <details class="acc"><summary>📥 GPSログの取り込み・書き出し</summary><div class="accb">
+      <p class="note">GPX / TCX / KML / GeoJSON / CSV / Googleの位置履歴(JSON・Takeout の ZIP)に対応。形式が分からないJSONでも、座標らしい値を探して読み取ります。歩いた道の霧が晴れ、通った県・市区町村、道すじ沿いの名所も記録され、距離が👣になります。速度の制限はなく、電車や車の移動も、記録のとおりに反映されます。</p>
+      <p class="note">💡 ホーム画面に「インストール」しておくと、GPSLoggerなどのアプリで、GPXを「共有」→「Sanpo Quest」を選ぶだけで取り込めます。</p>
+      <label class="rangesel">取り込む期間 <select id="imp-range"><option value="0" selected>すべて</option><option value="365">直近1年</option><option value="90">直近3か月</option><option value="30">直近1か月</option><option value="7">直近1週間</option></select></label>
+      <label class="filebtn">ファイルを選ぶ(どの種類でも選べます)<input id="imp-file" type="file" multiple></label>
+      <div id="imp-status"></div>
+      <textarea id="imp-diag" rows="7" readonly hidden></textarea>
+      <details class="paste"><summary>ファイルが選べないとき: 中身を貼り付けて取り込む</summary>
+        <textarea id="imp-paste" rows="4" placeholder="GPX・JSON・CSVの中身をここに貼り付け"></textarea>
+        <button id="imp-paste-go" class="sub2">貼り付けた内容を取り込む</button>
+      </details>
+      <ul id="imp-hist"></ul>
+      <button id="adv-export" class="sub2">このアプリの足あとをGPXで書き出す</button>
+    </div></details>
+    <button id="set-close" class="sub2">閉じる</button>
   </div>
 </section>
 <section id="book" hidden>
@@ -129,11 +145,11 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=53"></script>
-<script src="jpmap.js?v=53"></script>
+<script src="art.js?v=54"></script>
+<script src="jpmap.js?v=54"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="online.js?v=53"></script>
-<script src="backup.js?v=53"></script>
-<script src="game.js?v=53"></script>
+<script src="online.js?v=54"></script>
+<script src="backup.js?v=54"></script>
+<script src="game.js?v=54"></script>
 </body>
 </html>
