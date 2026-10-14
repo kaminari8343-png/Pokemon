@@ -278,7 +278,7 @@ window.ART = (function () {
       path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#5a8ad8') + path('M25 41 L39 41 L40 46 L24 46Z', '#9fc4f4') +
       circ(32, 28, 10, '#f0a24a') + poly('23,22 24,10 31,19', '#f0a24a') + poly('41,22 40,10 33,19', '#f0a24a') + poly('25,19 25.5,13 29,18', '#ffb3c8') + poly('39,19 38.5,13 35,18', '#ffb3c8') +
       circ(28.5, 27, 1.5, O, false) + circ(35.5, 27, 1.5, O, false) + circ(32, 31, 1.4, '#e2574c', false) + line(24, 30, 19, 29, O, 1) + line(24, 32, 19, 33, O, 1) + line(40, 30, 45, 29, O, 1) + line(40, 32, 45, 33, O, 1) },
-    { id: 'robot', name: 'ロボット', svg: () => HG('r') +
+    { id: 'robot', name: 'ロボット', img: 'assets/hero-robot.png', svg: () => HG('r') +
       line(32, 8, 32, 14, '#8b8b9b', 2) + circ(32, 7, 3, '#e2574c') +
       rect(19, 33, 26, 22, '#9fb0c8') + rect(25, 39, 14, 9, '#6ec6ff', 2) + circ(29, 43.5, 1.6, '#fff', false) + circ(35, 43.5, 1.6, '#fff', false) +
       rect(12, 34, 7, 16, '#8a9ab0', 3) + rect(45, 34, 7, 16, '#8a9ab0', 3) + rect(23, 55, 7, 4, '#6a7a90', 1) + rect(34, 55, 7, 4, '#6a7a90', 1) +
