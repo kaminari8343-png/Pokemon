@@ -134,7 +134,7 @@ function evtRender() {
       `<button id="fam-create">家族グループを作る</button><div class="ol-add"><input id="fam-code" maxlength="10" placeholder="家族コード(8文字)"><button id="fam-join">参加する</button></div></div>`;
   } else {
     const n = (st.members || []).length;
-    h += `<div class="ol-box"><b>👨‍👩‍👧 家族 ${n}/4人</b> <span class="famcode">家族コード <b>${esc(st.code)}</b></span><div class="evt-mem">${(st.members || []).map(m => `<span class="${m.me ? 'me' : ''}">${esc(m.name)}${m.me ? '(あなた)' : ''}</span>`).join('')}</div></div>`;
+    h += `<div class="ol-box"><b>👨‍👩‍👧 家族 ${n}/4人</b> <span class="famcode">家族コード <b>${esc(st.code)}</b></span> <button id="fam-copy" class="tinybtn">コピー</button> <button id="fam-share" class="tinybtn">送る</button><div class="evt-mem">${(st.members || []).map(m => `<span class="${m.me ? 'me' : ''}">${esc(m.name)}${m.me ? '(あなた)' : ''}</span>`).join('')}</div></div>`;
     if (!st.started) h += `<button id="evt-start" class="evt-go">${ev.icon} 今日のイベントを はじめる!</button><p class="note">押した場所のまわりに、宝箱が現れます。家族みんなで、その近くまで行こう。</p>`;
     else {
       const got = evtBits(st.union), solo = n < 2;
@@ -152,6 +152,12 @@ function evtRender() {
   on('fam-create', async () => { try { const r = await evtCall('family_create'); if (r.ok === false) toast(r.err); else toast('家族グループを作りました。家族コードを家族に教えてね'); await evtRefresh(true); } catch (e) { toast(e.message || e); } });
   on('fam-join', async () => { const c = ($('fam-code').value || '').trim(); if (!c) return; try { const r = await evtCall('family_join', { p_code: c }); if (r.ok === false) toast(r.err); else toast('家族グループに入りました'); await evtRefresh(true); } catch (e) { toast(e.message || e); } });
   on('fam-leave', async () => { if (!confirm('家族グループを抜けますか?')) return; try { await evtCall('family_leave'); evtSt = null; evtDrawChests(ev); await evtRefresh(true); } catch (e) { toast(e.message || e); } });
+  on('fam-copy', async () => { try { await navigator.clipboard.writeText(st.code); toast('家族コードをコピーしました'); } catch (e) { prompt('このコードをコピーして家族に送ってね', st.code); } });
+  on('fam-share', async () => {
+    const text = `Sanpo Quest の家族イベントに参加してね!\n家族コード: ${st.code}\nアプリ: https://kaminari8343-png.github.io/Pokemon/\n(アプリの🍂ボタン → コードを入れて「参加する」)`;
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(text); toast('案内の文章をコピーしました。LINEなどに貼り付けてね'); } catch (e) { prompt('この文章を家族に送ってね', text); }
+  });
   on('evt-start', evtStart); on('evt-together', evtTogether);
   on('evt-map', () => { $('evt').hidden = true; if (evtSt && evtSt.clat != null && typeof map !== 'undefined') { follow = false; map.flyTo({ center: [evtSt.clng, evtSt.clat], zoom: 16 }); } });
 }

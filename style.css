@@ -293,3 +293,4 @@ a.sub2{display:block;text-align:center;text-decoration:none;box-sizing:border-bo
 #nav .nv .ni img{width:26px;height:26px;object-fit:contain}
 #btns button img{width:26px;height:26px;object-fit:contain;margin:auto;pointer-events:none}
 #coins{display:inline-flex;align-items:center;gap:10px}#coins .wi{display:inline-flex;align-items:center;gap:3px;font-style:normal}#coins .wi img{width:20px;height:20px}
+.famcode b,.ol-code{user-select:all;-webkit-user-select:all}#evt .card{-webkit-user-select:text;user-select:text}
