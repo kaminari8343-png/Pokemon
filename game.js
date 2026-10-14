@@ -1690,7 +1690,7 @@ function renderAdvPanel() {
   $('hero-pick').querySelectorAll('button').forEach(b => b.onclick = () => { save.hero = b.dataset.h; persist(); refreshHero(); renderAdvPanel(); toast(`👤 キャラクターを「${ART.heroes().find(h => h.id === save.hero).name}」にしました`); });
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
   $('adv-toggle').textContent = mode === 'adventure' ? '🚶 現実モードにもどる(GPSで歩く)' : '🗺️ 冒険モードにする';
-  $('nav-mode-ic').textContent = mode === 'adventure' ? '🗺️' : '🚶'; $('nav-mode-tx').textContent = mode === 'adventure' ? '冒険' : 'リアル';
+  $('nav-mode-ic').innerHTML = mode === 'adventure' ? ART.icon('map', '🗺️') : ART.icon('foot', '🚶'); $('nav-mode-tx').textContent = mode === 'adventure' ? '冒険' : 'リアル';
   $('awake').checked = !!save.awake; $('awake-st').textContent = !('wakeLock' in navigator) ? '(このブラウザは未対応)' : wakeLock ? '(今: 有効)' : save.awake ? '(画面を触ると有効になります)' : '';
   $('lite').checked = isLite(); $('speedlimit').checked = !!save.speedLimit;
   $('gate-list').innerHTML = save.gates.length ? save.gates.map(x => `<li><b>🌀 ${esc(x.name)}</b><button data-w="${x.id}">ワープ</button></li>`).join('') : '<li class="note">まだゲートがありません</li>';
@@ -2072,6 +2072,7 @@ save.gates.forEach(addGateMarker);
 if (typeof onlineInit === 'function') onlineInit();
 if (typeof backupInit === 'function') backupInit();
 if (typeof eventsInit === 'function') eventsInit();
+if (!$('nav-mode-ic').firstElementChild) $('nav-mode-ic').innerHTML = ART.icon('foot', '🚶');
 function nearName(p) {
   let best = null, bd = 200;
   for (const q of pois.values()) { const d = dist(p, q); if (d < bd && save.found[q.id]) { bd = d; best = q; } }
