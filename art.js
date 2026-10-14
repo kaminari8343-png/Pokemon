@@ -244,6 +244,7 @@ window.ART = (function () {
     shard: () => glow('cn4', 32, 32, 30, '#c9a8ff', 0.8) + poly('32,3 44,22 38,58 26,58 20,22', '#b79bff') + poly('32,3 44,22 32,26', '#e8dcff') + poly('13,34 20,28 22,58 8,58', '#9a7bf0') + sparkle(52, 14, 1.5) + sparkle(12, 18, 1.1),
   };
   const ICON_IMG = { foot: 'assets/icon-foot.png', map: 'assets/icon-map.png', gate: 'assets/icon-gate.png', hammer: 'assets/icon-hammer.png', shop: 'assets/icon-shop.png', book: 'assets/icon-book.png', menu: 'assets/icon-menu.png', refresh: 'assets/icon-refresh.png', steps: 'assets/icon-steps.png', locate: 'assets/icon-locate.png', compass: 'assets/icon-compass.png' };      // メニューなどの小さなアイコン(GPTで作った絵。ないものは絵文字のまま)
+  const ITEM_IMG = { flower: ['assets/item-flower-1.png', 'assets/item-flower-2.png', 'assets/item-flower-3.png'], tree: ['assets/item-tree-1.png', 'assets/item-tree-2.png', null], rest: ['assets/item-rest-1.png', 'assets/item-rest-2.png', 'assets/item-rest-3.png'], lantern: ['assets/item-lantern-1.png', 'assets/item-lantern-2.png', 'assets/item-lantern-3.png'], fountain: ['assets/item-fountain-1.png', 'assets/item-fountain-2.png', 'assets/item-fountain-3.png'], shrine: ['assets/item-shrine-1.png', 'assets/item-shrine-2.png', 'assets/item-shrine-3.png'], house: ['assets/item-house-1.png', 'assets/item-house-2.png', 'assets/item-house-3.png'] };      // GPTで作った建物の絵(段階1〜3。nullは、SVGのまま)
   const POI_IMG = { 'ほこら': 'assets/poi-hokora.png', '古刹': 'assets/poi-koshi.png', '礼拝堂': 'assets/poi-chapel.png', '古城': 'assets/poi-castle.png', '古い遺跡': 'assets/poi-ruins.png', '森の広場': 'assets/poi-forest.png', '花の庭園': 'assets/poi-garden.png', 'ふしぎな石像': 'assets/poi-statue.png', '星見台': 'assets/poi-observatory.png', 'ふしぎな水晶': 'assets/poi-crystal.png', '知の殿堂': 'assets/poi-museum.png', '旅の門': 'assets/poi-station.png', '癒しの泉': 'assets/poi-onsen.png', '旅人の宿': 'assets/poi-inn.png', '知恵の書庫': 'assets/poi-library.png' };      // GPTで作った名所の絵(あるものだけ)
   const COIN_IMG = { coin: 'assets/icon-coin.png', gem: 'assets/icon-gem.png', bag: 'assets/icon-bag.png', shard: 'assets/icon-shard.png' };      // GPTで作った絵(あるものだけ)。ない・読めないときは、SVGにもどる
   // ---- 主人公(魔法使い) ----
@@ -314,7 +315,8 @@ window.ART = (function () {
 
   const mini = (inner, px) => svg(inner, px);
   return {
-    item: (id, lv, px = 64) => svg(ITEMS[id][Math.min(3, Math.max(1, lv || 1)) - 1](), px),
+    item: (id, lv, px = 64) => { const L = Math.min(3, Math.max(1, lv || 1)); return (ITEM_IMG[id] || [])[L - 1] ? `<img src="${ITEM_IMG[id][L - 1]}" width="${px}" height="${px}" alt="" draggable="false" style="display:block" onerror="this.outerHTML=ART.itemSvg('${id}',${L},${px})">` : svg(ITEMS[id][L - 1](), px); },
+    itemSvg: (id, lv, px = 64) => svg(ITEMS[id][Math.min(3, Math.max(1, lv || 1)) - 1](), px),
     poi: (kind, px = 64) => POI_IMG[kind] ? `<img src="${POI_IMG[kind]}" width="${px}" height="${px}" alt="" draggable="false" style="display:block" onerror="this.outerHTML=ART.poiSvg(this.dataset.k,${px})" data-k="${kind}">` : svg((POI[kind] || POI['森の広場'])(), px),
     poiSvg: (kind, px = 64) => svg((POI[kind] || POI['森の広場'])(), px),
     unknown: (px = 56) => `<img src="assets/poi-unknown.png" width="${px}" height="${px}" alt="" draggable="false" style="display:block" onerror="this.outerHTML=ART.unknownSvg(${px})">`,
