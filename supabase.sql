@@ -342,3 +342,164 @@ end $$;
 
 revoke all on function public.put_backup(text, text), public.get_backup(text) from public, anon;
 grant execute on function public.put_backup(text, text), public.get_backup(text) to authenticated;
+
+-- ===== 家族イベント(最大4人の家族グループ。宝箱の集計と「いっしょにいる」確認) =====
+-- 位置は「いっしょにいる確認」のときだけ送り、10分で使い終わります。ほかの人には、返しません。
+create table if not exists public.families (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.family_members (
+  player_id uuid primary key references public.players(id) on delete cascade,
+  family_id uuid not null references public.families(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  ck_lat double precision, ck_lng double precision, ck_at timestamptz
+);
+create table if not exists public.family_events (
+  family_id uuid not null references public.families(id) on delete cascade,
+  event_id text not null,
+  day date not null,
+  clat double precision not null, clng double precision not null,
+  created_at timestamptz not null default now(),
+  primary key (family_id, event_id, day)
+);
+create table if not exists public.family_progress (
+  family_id uuid not null references public.families(id) on delete cascade,
+  event_id text not null,
+  day date not null,
+  player_id uuid not null references public.players(id) on delete cascade,
+  mask int not null default 0,
+  together boolean not null default false,
+  primary key (family_id, event_id, day, player_id)
+);
+create index if not exists family_members_fam on public.family_members (family_id);
+alter table public.families enable row level security;
+alter table public.family_members enable row level security;
+alter table public.family_events enable row level security;
+alter table public.family_progress enable row level security;
+revoke all on public.families, public.family_members, public.family_events, public.family_progress from anon, authenticated;
+
+create or replace function public.family_create() returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); fid uuid; c text; i int := 0;
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  if not exists (select 1 from players where id = uid) then raise exception 'はじめに、オンラインの登録が必要です'; end if;
+  if exists (select 1 from family_members where player_id = uid) then return json_build_object('ok', false, 'err', 'もう家族グループに入っています'); end if;
+  loop
+    begin
+      insert into families (code) values (upper(substr(md5(random()::text || clock_timestamp()::text || uid::text), 1, 8))) returning id, code into fid, c;
+      exit;
+    exception when unique_violation then
+      i := i + 1; if i > 8 then raise exception 'コードを作れませんでした'; end if;
+    end;
+  end loop;
+  insert into family_members (player_id, family_id) values (uid, fid);
+  return json_build_object('ok', true, 'code', c);
+end $$;
+
+create or replace function public.family_join(p_code text) returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); me players; f families; n int;
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  select * into me from players where id = uid for update;
+  if not found then raise exception 'はじめに、オンラインの登録が必要です'; end if;
+  if exists (select 1 from family_members where player_id = uid) then return json_build_object('ok', false, 'err', 'もう家族グループに入っています'); end if;
+  if coalesce(me.bad_tries, 0) >= 10 and me.bad_since > now() - interval '1 hour' then
+    return json_build_object('ok', false, 'err', 'まちがいが多いため、しばらくしてからためしてね');
+  end if;
+  select * into f from families where code = upper(trim(p_code));
+  if not found then
+    update players set bad_tries = case when bad_since > now() - interval '1 hour' then bad_tries + 1 else 1 end,
+      bad_since = case when bad_since > now() - interval '1 hour' then bad_since else now() end where id = uid;
+    return json_build_object('ok', false, 'err', 'そのコードの家族が見つかりません');
+  end if;
+  select count(*) into n from family_members where family_id = f.id;
+  if n >= 4 then return json_build_object('ok', false, 'err', '家族は、4人までです'); end if;
+  insert into family_members (player_id, family_id) values (uid, f.id);
+  return json_build_object('ok', true, 'code', f.code);
+end $$;
+
+create or replace function public.family_leave() returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); fid uuid;
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  select family_id into fid from family_members where player_id = uid;
+  delete from family_members where player_id = uid;
+  if fid is not null and not exists (select 1 from family_members where family_id = fid) then delete from families where id = fid; end if;
+  return json_build_object('ok', true);
+end $$;
+
+-- 今日のイベントを、はじめる(家族の最初のひとりが押した場所が、宝さがしの中心になる。約110mにまるめる)
+create or replace function public.family_start(p_event text, p_lat double precision, p_lng double precision) returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); fid uuid; d date := (now() at time zone 'Asia/Tokyo')::date;
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  select family_id into fid from family_members where player_id = uid;
+  if fid is null then return json_build_object('ok', false, 'err', '先に家族グループに入ってください'); end if;
+  if p_event is null or p_event !~ '^[a-z0-9-]{1,40}$' then raise exception 'イベントが正しくありません'; end if;
+  if p_lat is null or p_lng is null or p_lat not between -90 and 90 or p_lng not between -180 and 180 then raise exception '位置が正しくありません'; end if;
+  insert into family_events (family_id, event_id, day, clat, clng) values (fid, p_event, d, round(p_lat::numeric, 3), round(p_lng::numeric, 3)) on conflict do nothing;
+  insert into family_progress (family_id, event_id, day, player_id) values (fid, p_event, d, uid) on conflict do nothing;
+  return json_build_object('ok', true);
+end $$;
+
+-- 自分が開けた宝箱(ビット)を送る。ふやすことだけできる
+create or replace function public.family_report(p_event text, p_mask int) returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); fid uuid; d date := (now() at time zone 'Asia/Tokyo')::date;
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  select family_id into fid from family_members where player_id = uid;
+  if fid is null then return json_build_object('ok', false); end if;
+  update family_progress set mask = mask | (coalesce(p_mask, 0) & 65535) where family_id = fid and event_id = p_event and day = d and player_id = uid;
+  return json_build_object('ok', true);
+end $$;
+
+-- 「いっしょにいる」確認: 10分いない・150m以内に、家族のだれかが確認していれば、おたがい「いっしょ」になる
+create or replace function public.family_together(p_event text, p_lat double precision, p_lng double precision) returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); fid uuid; d date := (now() at time zone 'Asia/Tokyo')::date; o record; hit boolean := false; dm double precision;
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  select family_id into fid from family_members where player_id = uid;
+  if fid is null then return json_build_object('ok', false, 'err', '先に家族グループに入ってください'); end if;
+  if p_lat is null or p_lng is null or p_lat not between -90 and 90 or p_lng not between -180 and 180 then raise exception '位置が正しくありません'; end if;
+  update family_members set ck_lat = p_lat, ck_lng = p_lng, ck_at = now() where player_id = uid;
+  for o in select player_id, ck_lat, ck_lng from family_members where family_id = fid and player_id <> uid and ck_at > now() - interval '10 minutes' loop
+    dm := sqrt(power((o.ck_lat - p_lat) * 111320, 2) + power((o.ck_lng - p_lng) * 111320 * cos(radians(p_lat)), 2));
+    if dm <= 150 then
+      hit := true;
+      update family_progress set together = true where family_id = fid and event_id = p_event and day = d and player_id in (uid, o.player_id);
+    end if;
+  end loop;
+  if hit then update family_members set ck_lat = null, ck_lng = null, ck_at = null where family_id = fid; end if;
+  return json_build_object('ok', true, 'together', hit);
+end $$;
+
+-- 家族と、今日のイベントの進みぐあい(位置は、返さない)
+create or replace function public.family_status(p_event text) returns json
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); fid uuid; fc text; d date := (now() at time zone 'Asia/Tokyo')::date; ev family_events; mem json; u int := 0; tg boolean := false; r record;
+begin
+  if uid is null then raise exception 'ログインしていません'; end if;
+  select m.family_id, f.code into fid, fc from family_members m join families f on f.id = m.family_id where m.player_id = uid;
+  if fid is null then return json_build_object('ok', true, 'in_family', false); end if;
+  select * into ev from family_events where family_id = fid and event_id = p_event and day = d;
+  select json_agg(json_build_object('name', p.name, 'me', p.id = uid, 'mask', coalesce(g.mask, 0), 'together', coalesce(g.together, false)) order by m.joined_at)
+    into mem from family_members m join players p on p.id = m.player_id
+    left join family_progress g on g.family_id = m.family_id and g.event_id = p_event and g.day = d and g.player_id = m.player_id where m.family_id = fid;
+  for r in select mask, together from family_progress where family_id = fid and event_id = p_event and day = d loop u := u | r.mask; tg := tg or r.together; end loop;
+  return json_build_object('ok', true, 'in_family', true, 'code', fc, 'day', d, 'members', coalesce(mem, '[]'::json),
+    'started', ev.family_id is not null, 'clat', ev.clat, 'clng', ev.clng, 'union', u, 'together', tg,
+    'seed', case when ev.family_id is not null then md5(fid::text || p_event || d::text) end);
+end $$;
+
+revoke all on function public.family_create(), public.family_join(text), public.family_leave(), public.family_start(text, double precision, double precision),
+  public.family_report(text, int), public.family_together(text, double precision, double precision), public.family_status(text) from public, anon;
+grant execute on function public.family_create(), public.family_join(text), public.family_leave(), public.family_start(text, double precision, double precision),
+  public.family_report(text, int), public.family_together(text, double precision, double precision), public.family_status(text) to authenticated;

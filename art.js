@@ -283,11 +283,22 @@ window.ART = (function () {
       rect(19, 33, 26, 22, '#9fb0c8') + rect(25, 39, 14, 9, '#6ec6ff', 2) + circ(29, 43.5, 1.6, '#fff', false) + circ(35, 43.5, 1.6, '#fff', false) +
       rect(12, 34, 7, 16, '#8a9ab0', 3) + rect(45, 34, 7, 16, '#8a9ab0', 3) + rect(23, 55, 7, 4, '#6a7a90', 1) + rect(34, 55, 7, 4, '#6a7a90', 1) +
       rect(22, 14, 20, 17, '#b8c6d8', 4) + rect(25, 19, 14, 7, '#2f3a6a', 2) + circ(29, 22.5, 1.8, '#6fffb0', false) + circ(35, 22.5, 1.8, '#6fffb0', false) },
+    { id: 'fox', name: 'きつねの子', limited: '秋の宝さがし', svg: () => HG('f') +
+      path('M44 54 Q60 52 58 36 Q56 46 44 46Z', '#f08a3a') + path('M55 40 Q58 38 58 36 Q56 40 52 42Z', '#fff') +
+      path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#4a9a52') + path('M24 36 L40 36 L38 42 L26 42Z', '#7fcf6a') + circ(32, 40.5, 1.6, '#ffd24a', false) +
+      circ(32, 28, 10, '#f08a3a') + poly('22,22 22,9 30,18', '#f08a3a') + poly('42,22 42,9 34,18', '#f08a3a') + poly('24,19 24,13 28,18', '#fff') + poly('40,19 40,13 36,18', '#fff') +
+      path('M23 29 Q32 40 41 29 Q36 33 32 33 Q28 33 23 29Z', '#fff') + circ(28.5, 27, 1.5, O, false) + circ(35.5, 27, 1.5, O, false) + circ(32, 30, 1.3, O, false) },
     { id: 'ghost', name: 'おばけ', svg: () => HG('g') +
       path('M18 58 L18 30 Q18 12 32 12 Q46 12 46 30 L46 58 Q42 52 38 58 Q34 52 32 58 Q28 52 26 58 Q22 52 18 58Z', '#f4f4ff') +
       circ(27, 30, 2.4, O, false) + circ(37, 30, 2.4, O, false) + ell(32, 38, 3, 2.2, '#8a8ab8') + circ(23, 35, 2.2, '#ffb3c8', false) + circ(41, 35, 2.2, '#ffb3c8', false) +
       path('M22 14 Q32 22 42 14 Q38 24 32 24 Q26 24 22 14Z', '#e2574c') + path('M24 22 L22 30 L28 24Z', '#e2574c') },
   ];
+  // ---- イベント用: 宝箱・ステッカー ----
+  const CHEST = () => glow('chg', 32, 38, 28, '#ffe28a', 0.7) + rect(12, 30, 40, 24, '#a9743f') + path('M12 32 Q12 14 32 14 Q52 14 52 32Z', '#c98a4b') + rect(12, 30, 40, 5, '#7a4e22', 1) +
+    line(22, 16, 22, 54, '#7a4e22', 2) + line(42, 16, 42, 54, '#7a4e22', 2) + rect(27, 31, 10, 9, '#ffd24a') + circ(32, 35.5, 1.6, O, false) + sparkle(50, 12, 1.2) + sparkle(14, 18, 0.8);
+  const STICKERS = {
+    autumn: () => circ(32, 32, 28, '#fff') + circ(32, 32, 24, '#ffb347') + path('M32 14 L36 22 L44 20 L41 28 L49 31 L41 36 L43 44 L35 41 L32 50 L29 41 L21 44 L23 36 L15 31 L23 28 L20 20 L28 22Z', '#e2574c') + line(32, 38, 32, 52, O, 2.4) + circ(32, 32, 24, 'none').replace('fill="none"', 'fill="none"'),
+  };
   const BUTTERFLY = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><path d="M16 16 Q4 2 3 12 Q3 20 16 17Z" fill="#ff9a3d" ${SW(1.4)}/><path d="M16 16 Q28 2 29 12 Q29 20 16 17Z" fill="#ff9a3d" ${SW(1.4)}/><path d="M16 17 Q6 20 8 27 Q14 28 16 18Z" fill="#ffd24a" ${SW(1.4)}/><path d="M16 17 Q26 20 24 27 Q18 28 16 18Z" fill="#ffd24a" ${SW(1.4)}/><rect x="15" y="9" width="2" height="14" rx="1" fill="${O}"/></svg>`;
   // ---- 地面の飾り(キャンバス用) ----
   const DECOR = [
@@ -307,7 +318,9 @@ window.ART = (function () {
     poiKinds: () => Object.keys(POI),
     coin: (kind, px = 40) => svg(COIN[kind || 'coin'](), px),
     hero: (px = 56, id) => svg((HEROES.find(h => h.id === id) || HEROES[0]).svg(), px),
-    heroes: () => HEROES.map(h => ({ id: h.id, name: h.name })),
+    heroes: () => HEROES.map(h => ({ id: h.id, name: h.name, limited: h.limited || '' })),
+    chest: (px = 44) => svg(CHEST(), px),
+    sticker: (id, px = 56) => svg((STICKERS[id] || STICKERS.autumn)(), px),
     butterfly: BUTTERFLY,
     decorSvgs: DECOR.map(f => svg(f(), 64)),
     sheet: () => Object.keys(ITEMS).map(id => [1, 2, 3].map(l => svg(ITEMS[id][l - 1](), 72)).join('')).join('<br>') + '<br>' +

@@ -271,3 +271,22 @@ a.sub2{display:block;text-align:center;text-decoration:none;box-sizing:border-bo
 #btn-debug.on{background:var(--gold)!important}
 /* メッセージは、シート(メニューなど)より手前に出す */
 #toast{z-index:3500;top:calc(60px + env(safe-area-inset-top,0px))}
+
+/* ===== 家族イベント ===== */
+#evt{position:fixed;inset:0;z-index:2000;background:rgba(10,8,30,.55);display:flex;align-items:flex-end;justify-content:center;animation:fadein .18s}
+#btn-event{position:relative}
+#btn-event.dot::after{content:"";position:absolute;top:-1px;right:-1px;width:12px;height:12px;border-radius:50%;background:#e2574c;border:2px solid #fff;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.25)}}
+.chestpin .sp{display:block;line-height:0;filter:drop-shadow(0 3px 3px rgba(0,0,0,.5));animation:hover 1s ease-in-out infinite alternate}
+.evt-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}.evt-head b{font-size:18px;display:block}.evt-head small{opacity:.7}
+.evt-ic{font-size:34px}
+.evt-reward{display:flex;align-items:center;gap:10px;background:#fff1c9;border:2px dashed #e0a526;border-radius:14px;padding:8px 10px;margin:8px 0}
+.evt-reward small{display:block;font-size:12px;opacity:.85;margin-top:2px}
+.card button.evt-go{background:linear-gradient(180deg,#f0a030,#d9782a);color:#fff;font-size:17px;font-weight:800;padding:14px;margin:8px 0;box-shadow:0 3px 0 #9a5418}
+.evt-bar{height:14px;border-radius:9px;background:#e6d9b8;overflow:hidden;margin:8px 0}.evt-bar i{display:block;height:100%;background:linear-gradient(90deg,#f0a030,#e2574c);border-radius:9px}
+.evt-row{padding:3px 0}.evt-row small{margin-left:6px;opacity:.7}
+.evt-clear{margin-top:6px;text-align:center;font-weight:800;font-size:18px;color:#2f7d4f}
+.evt-mem{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.evt-mem span{background:#fff8e1;border:1px solid #d9c9a0;border-radius:14px;padding:3px 10px;font-size:13px}.evt-mem .me{background:#ffe9a8;font-weight:700}
+.famcode{margin-left:6px;font-size:13px}.famcode b{letter-spacing:2px}
+.evt-album{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px;text-align:center}.evt-album>div{background:#fff8e1;border:2px solid #d9c9a0;border-radius:10px;padding:4px 0}
+.evt-album small{display:block;font-size:10px;font-weight:700;line-height:1.2}.evt-album .lock span{filter:brightness(0) opacity(.35)}

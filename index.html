@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=55">
+<link rel="stylesheet" href="style.css?v=56">
 </head>
 <body>
 <div id="map"></div>
@@ -31,6 +31,7 @@
 <div id="realbar" hidden><span id="real-text"></span><button id="real-go">現実の現在地へ戻る</button></div>
 <div id="status">位置情報を取得中…</div>
 <div id="btns">
+  <button id="btn-event" title="今日のイベント" hidden>🍂</button>
   <button id="btn-view" title="見下ろし/斜め">🧭</button>
   <button id="btn-locate" title="現在地へ(位置を取り直す)">📍</button>
   <button id="btn-refresh" title="更新(長押しでアプリを最新版に)">🔄</button>
@@ -54,6 +55,13 @@
     <p class="note">コインで買う、時間つきのアイテム。買うとすぐ効いて、時間がたつと切れます(重ねて買うと延びます)。</p>
     <div id="shop-list"></div>
     <button id="shop-close">閉じる</button>
+  </div>
+</section>
+<section id="evt" hidden>
+  <div class="card">
+    <h2>🍂 今日のイベント</h2>
+    <div id="evt-body"></div>
+    <button id="evt-close">閉じる</button>
   </div>
 </section>
 <div id="fxbar" hidden></div>
@@ -145,11 +153,12 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=55"></script>
-<script src="jpmap.js?v=55"></script>
+<script src="art.js?v=56"></script>
+<script src="jpmap.js?v=56"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="online.js?v=55"></script>
-<script src="backup.js?v=55"></script>
-<script src="game.js?v=55"></script>
+<script src="online.js?v=56"></script>
+<script src="backup.js?v=56"></script>
+<script src="events.js?v=56"></script>
+<script src="game.js?v=56"></script>
 </body>
 </html>

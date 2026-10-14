@@ -1678,14 +1678,15 @@ async function importFile(file) {
   try { await importFileRaw(file); }
   catch (e) { $('imp-status').textContent = `⚠️ ${file.name}: 想定外のエラー(${e && e.message || e})。下の診断を、そのままコピーして教えてください`; $('imp-diag').value = `エラー: ${e && e.stack || e}`; $('imp-diag').hidden = false; }
 }
-const heroId = () => ART.heroes().some(h => h.id === save.hero) ? save.hero : 'mage';
+const heroOK = h => !h.limited || (save.unlocked && save.unlocked[h.id]);      // イベント限定キャラは、手に入れた人だけ
+const heroId = () => ART.heroes().some(h => h.id === save.hero && heroOK(h)) ? save.hero : 'mage';
 function refreshHero() {                    // 選んだキャラクターに、地図の上の姿を取りかえる
   const id = heroId();
   if (meMarker) { const sp = meMarker.getElement().querySelector('.sp'); if (sp) sp.innerHTML = ART.hero(56, id); }
   if (ghost) { const sp = ghost.getElement().querySelector('.sp'); if (sp) sp.innerHTML = ART.hero(44, id); }
 }
 function renderAdvPanel() {
-  $('hero-pick').innerHTML = ART.heroes().map(h => `<button data-h="${h.id}" class="${h.id === heroId() ? 'on' : ''}">${ART.hero(52, h.id)}<small>${h.name}</small></button>`).join('');
+  $('hero-pick').innerHTML = ART.heroes().filter(heroOK).map(h => `<button data-h="${h.id}" class="${h.id === heroId() ? 'on' : ''}">${ART.hero(52, h.id)}<small>${h.name}${h.limited ? '<br>★限定' : ''}</small></button>`).join('');
   $('hero-pick').querySelectorAll('button').forEach(b => b.onclick = () => { save.hero = b.dataset.h; persist(); refreshHero(); renderAdvPanel(); toast(`👤 キャラクターを「${ART.heroes().find(h => h.id === save.hero).name}」にしました`); });
   $('adv-ap').innerHTML = `<b>👣 ${Math.floor(save.ap)}</b> <small>(約${(save.ap * 10 / 1000).toFixed(1)}km分の冒険ができる)</small>`;
   $('adv-toggle').textContent = mode === 'adventure' ? '🚶 現実モードにもどる(GPSで歩く)' : '🗺️ 冒険モードにする';
@@ -1970,7 +1971,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
       last = { p: ll, t: now };
     }
   }
-  revealAround(ll); maintainCoins(); pickCoins(accuracy); visitBuilt(); maybeFetchPois(); checkFound(); maybeRegionVisit(); updateHint(); persistSoon(); updateHud();
+  revealAround(ll); maintainCoins(); pickCoins(accuracy); visitBuilt(); maybeFetchPois(); checkFound(); if (typeof evtTick === 'function') evtTick(); maybeRegionVisit(); updateHint(); persistSoon(); updateHud();
   if (now - weather.at > 30 * 60e3) fetchWeather();
   checkDaily();
   if (now - (updatePosition.titleAt || 0) > 15000) { updatePosition.titleAt = now; checkTitles(); }
@@ -2070,6 +2071,7 @@ function addGateMarker(g) { gateMarkers.set(g.id, addPin(g, '', gateHtml(g), () 
 save.gates.forEach(addGateMarker);
 if (typeof onlineInit === 'function') onlineInit();
 if (typeof backupInit === 'function') backupInit();
+if (typeof eventsInit === 'function') eventsInit();
 function nearName(p) {
   let best = null, bd = 200;
   for (const q of pois.values()) { const d = dist(p, q); if (d < bd && save.found[q.id]) { bd = d; best = q; } }
