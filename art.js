@@ -268,7 +268,7 @@ window.ART = (function () {
       path('M18 58 L22 35 Q32 31 42 35 L46 58 Z', '#2f3a6a') + path('M24 41 L40 41 L41 46 L23 46 Z', '#e2574c') +
       circ(32, 28, 9, '#2f3a6a') + rect(24, 24, 16, 7, '#ffd9b8', 2) + circ(28.5, 27.5, 1.3, O, false) + circ(35.5, 27.5, 1.3, O, false) +
       rect(22, 19, 20, 4, '#e2574c', 1) + path('M42 20 Q52 20 54 28 Q48 24 42 24Z', '#e2574c') },
-    { id: 'prince', name: 'おうじさま', svg: () => HG('p') +
+    { id: 'prince', name: 'おうじさま', img: 'assets/hero-prince.png', svg: () => HG('p') +
       rect(46, 14, 3, 44, '#e8b23a', 1) + circ(47.5, 12, 5.5, '#ff9ec7') + sparkle(55, 6, 1) +
       path('M16 58 L22 34 Q32 30 42 34 L48 58 Z', '#e86aa0') + path('M24 40 L40 40 L41 47 L23 47 Z', '#fff') + circ(32, 42, 1.6, '#ffd24a', false) +
       face(28) + path('M23 24 Q32 14 41 24 Q36 20 32 20 Q28 20 23 24Z', '#d9a066') +
