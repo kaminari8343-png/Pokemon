@@ -288,7 +288,7 @@ window.ART = (function () {
       path('M19 58 L23 35 Q32 31 41 35 L45 58 Z', '#4a9a52') + path('M24 36 L40 36 L38 42 L26 42Z', '#7fcf6a') + circ(32, 40.5, 1.6, '#ffd24a', false) +
       circ(32, 28, 10, '#f08a3a') + poly('22,22 22,9 30,18', '#f08a3a') + poly('42,22 42,9 34,18', '#f08a3a') + poly('24,19 24,13 28,18', '#fff') + poly('40,19 40,13 36,18', '#fff') +
       path('M23 29 Q32 40 41 29 Q36 33 32 33 Q28 33 23 29Z', '#fff') + circ(28.5, 27, 1.5, O, false) + circ(35.5, 27, 1.5, O, false) + circ(32, 30, 1.3, O, false) },
-    { id: 'ghost', name: 'おばけ', svg: () => HG('g') +
+    { id: 'ghost', name: 'おばけ', img: 'assets/hero-ghost.png', svg: () => HG('g') +
       path('M18 58 L18 30 Q18 12 32 12 Q46 12 46 30 L46 58 Q42 52 38 58 Q34 52 32 58 Q28 52 26 58 Q22 52 18 58Z', '#f4f4ff') +
       circ(27, 30, 2.4, O, false) + circ(37, 30, 2.4, O, false) + ell(32, 38, 3, 2.2, '#8a8ab8') + circ(23, 35, 2.2, '#ffb3c8', false) + circ(41, 35, 2.2, '#ffb3c8', false) +
       path('M22 14 Q32 22 42 14 Q38 24 32 24 Q26 24 22 14Z', '#e2574c') + path('M24 22 L22 30 L28 24Z', '#e2574c') },
