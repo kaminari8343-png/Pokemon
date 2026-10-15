@@ -1016,7 +1016,8 @@ function toast(msg) {
 }
 const fmt = m => m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m';
 function updateHud() {
-  $('s-today').textContent = fmt(save.today);
+  $('s-today').textContent = fmt(typeof walkToday === 'function' ? walkToday() : save.today);
+  if (typeof walkBar === 'function') walkBar();
   $('s-area').textContent = (explored.size * CELL * CELL / 1e6).toFixed(3) + ' km²';
   $('s-found').textContent = Object.keys(save.found).length;
   updateLevel();
@@ -1675,6 +1676,11 @@ async function importFileInner(file) {
   const summary = `${(r.total / 1000).toFixed(1)}km ・ 霧 +${((explored.size - cellsBefore) * CELL * CELL / 1e6).toFixed(3)}km² ・ 名所 +${poiNew} ・ 新しい県 ${gain.pref} / 市区町村 ${gain.city} ・ 👣 +${selfLog ? 0 : Math.round(r.total * AP_PER_M)}${note}${truncated ? ' ・ ※長い記録のため、地域・名所の検索は一部のみ' : ''}`;
   save.imports.unshift({ name: file.name, date: todayStr(), summary }); save.imports.length = Math.min(save.imports.length, 8); persist();
   log('✅ 取り込み完了: ' + summary); celebrate('📥', `取り込み完了！ ${(r.total / 1000).toFixed(1)}km`); renderAdvPanel();
+  if (typeof walkAfterImport === 'function') {          // 今日の散歩の宝箱に反映して、「今日のまとめ」を見せる
+    const wb = walkState(), opened0 = wb.opened.length, todayM = selfLog ? 0 : (r.byDay[todayStr()] || 0);
+    if (todayM) walkAddImported(todayM);
+    setTimeout(() => walkAfterImport({ km: r.total / 1000, today: todayM, poi: poiNew, fog: (explored.size - cellsBefore) * CELL * CELL / 1e6, pref: gain.pref, city: gain.city, chests: walkState().opened.length - opened0 }), 2500);
+  }
 }
 const importFileRaw = importFileInner;
 async function importFile(file) {
@@ -1977,7 +1983,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
   }
   revealAround(ll); maintainCoins(); pickCoins(accuracy); visitBuilt(); maybeFetchPois(); checkFound(); if (typeof evtTick === 'function') evtTick(); maybeRegionVisit(); updateHint(); persistSoon(); updateHud();
   if (now - weather.at > 30 * 60e3) fetchWeather();
-  checkDaily();
+  checkDaily(); if (typeof walkCheck === 'function') walkCheck();
   if (now - (updatePosition.titleAt || 0) > 15000) { updatePosition.titleAt = now; checkTitles(); }
   if (placing) showPlaceCircle();
   updateWallet();
@@ -2076,6 +2082,7 @@ save.gates.forEach(addGateMarker);
 if (typeof onlineInit === 'function') onlineInit();
 if (typeof backupInit === 'function') backupInit();
 if (typeof eventsInit === 'function') eventsInit();
+if (typeof walkInit === 'function') walkInit();
 document.querySelectorAll('[data-ico]').forEach(e => { e.innerHTML = ART.icon(e.dataset.ico, e.textContent); });      // 絵文字を、あれば絵に置きかえる
 if (!$('nav-mode-ic').firstElementChild) $('nav-mode-ic').innerHTML = ART.icon('foot', '🚶');
 function nearName(p) {

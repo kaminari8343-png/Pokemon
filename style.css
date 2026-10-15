@@ -295,3 +295,17 @@ a.sub2{display:block;text-align:center;text-decoration:none;box-sizing:border-bo
 #coins{display:inline-flex;align-items:center;gap:10px}#coins .wi{display:inline-flex;align-items:center;gap:3px;font-style:normal}#coins .wi img{width:20px;height:20px}
 .famcode b,.ol-code{user-select:all;-webkit-user-select:all}#evt .card{-webkit-user-select:text;user-select:text}
 .gates li .gbtns{display:flex;gap:6px;flex:none}.gates li .gbtns button{width:auto!important;padding:6px 12px!important;min-height:34px!important}
+
+/* ===== 今日の散歩 ===== */
+#walk{position:fixed;inset:0;z-index:2000;background:rgba(10,8,30,.55);display:flex;align-items:flex-end;justify-content:center;animation:fadein .18s}
+#walk-stat{cursor:pointer;position:relative}
+#walk-stat .wbar{display:block;height:5px;border-radius:3px;background:rgba(255,255,255,.16);margin-top:4px;overflow:hidden}
+#walk-stat .wbar b{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd873,#ff9a3d);border-radius:3px;transition:width .4s}
+#s-wbox{font-size:10px;opacity:.9}
+.walk-today{text-align:center;margin:6px 0}.walk-today b{display:block;font-size:30px}.walk-today small{opacity:.7}
+.walk-chests{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0}
+.walk-chests .wc{display:flex;flex-direction:column;align-items:center;gap:2px;background:#fff8e1;border:2px solid #d9c9a0;border-radius:14px;padding:8px 2px;text-align:center}
+.walk-chests .wc.lock span{filter:grayscale(1) brightness(.8) opacity(.6)}.walk-chests .wc.ready{border-color:#e08a00;background:#ffe9a8;animation:pulse 1.2s ease-in-out infinite}.walk-chests .wc.open{background:#e8f5df;border-color:#8bc34a}
+.walk-chests b{font-size:15px}.walk-chests small{font-size:11px}.walk-chests em{font-style:normal;font-size:12px;font-weight:700;color:#8a5a00}
+.walk-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:6px}.walk-grid div{background:#fff8e1;border-radius:10px;padding:6px 8px}.walk-grid b{display:block;font-size:16px}.walk-grid small{font-size:11px;opacity:.7}
+#s-wbox{display:block;margin-top:1px}
