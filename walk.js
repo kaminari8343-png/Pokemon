@@ -20,6 +20,7 @@ function walkOpen(i, quiet) {
   const w = walkState(), t = WALK_TIERS[i]; if (w.opened.includes(i)) return;
   w.opened.push(i); addGold(t.gold); if (t.shards) addShard(t.shards); addXp(40 * (i + 1)); persist();
   if (!quiet) { celebrate(ART.chest(104), `${t.name}が開いた! +${t.gold}🪙${t.shards ? ` +${t.shards}🔮` : ''}`); }
+  if (typeof gameFx === 'function') gameFx('chest');
 }
 function walkCheck(quiet) {
   const w = walkState(), d = walkToday(); let n = 0;

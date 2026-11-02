@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="style.css?v=104">
+<link rel="stylesheet" href="style.css?v=105">
 </head>
 <body>
 <div id="map"></div>
@@ -36,6 +36,21 @@
   <button id="btn-locate" data-ico="locate" title="現在地へ(位置を取り直す)">📍</button>
   <button id="btn-refresh" data-ico="refresh" title="更新(長押しでアプリを最新版に)">🔄</button>
 </div>
+<button id="pocket-go" hidden>▶ 散歩をはじめる<small>押したら、ポケットへ</small></button>
+<div id="pocket-bar" hidden><span id="pb-text"></span><button id="pb-lock">🔒 ポケットへ</button><button id="pb-end">🏁 おわる</button></div>
+<div id="pocket" hidden>
+  <div class="pk-top"><small id="pk-gps"></small></div>
+  <div class="pk-main"><small>散歩中</small><b id="pk-dist">0 m</b><span id="pk-sub"></span><span id="pk-next"></span></div>
+  <div id="pk-flash"></div>
+  <div class="pk-btns"><button id="pk-map">🗺️ 地図を見る<small>長押し</small></button><button id="pk-end">🏁 おわる<small>長押し</small></button></div>
+</div>
+<section id="result" hidden>
+  <div class="card">
+    <h2>🏁 散歩の結果</h2>
+    <div id="result-body"></div>
+    <button id="result-close">とじる</button>
+  </div>
+</section>
 <div id="placebar" hidden>
   <span id="place-text"></span>
   <button id="place-here">足もとに置く</button>
@@ -110,6 +125,7 @@
     <h2>☰ メニュー・設定</h2>
     <details class="acc" open><summary>👤 キャラクター</summary><div class="accb"><div id="hero-pick" class="heropick"></div></div></details>
     <details class="acc"><summary>⚙️ 動作の設定</summary><div class="accb">
+      <label class="awake"><input id="sound" type="checkbox" checked> 🔊 効果音(コイン・宝箱・名所の音) <small>ポケット散歩では、音と振動で知らせます</small></label>
       <label class="awake"><input id="awake" type="checkbox"> 🔆 ゲーム中は画面をつけたままにする <small id="awake-st"></small></label>
       <label class="awake"><input id="speedlimit" type="checkbox"> 🚶 速度制限(時速43km超は、歩いた距離に数えない) <small>オフだと、電車・車の移動も記録します</small></label>
       <label class="awake"><input id="lite" type="checkbox"> ⚡ かるいモード(重いとき) <small>飾り・アニメ・3D建物をやめて軽くします</small></label>
@@ -160,13 +176,14 @@
   </div>
 </section>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="art.js?v=104"></script>
-<script src="jpmap.js?v=104"></script>
+<script src="art.js?v=105"></script>
+<script src="jpmap.js?v=105"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="online.js?v=104"></script>
-<script src="backup.js?v=104"></script>
-<script src="events.js?v=104"></script>
-<script src="walk.js?v=104"></script>
-<script src="game.js?v=104"></script>
+<script src="online.js?v=105"></script>
+<script src="backup.js?v=105"></script>
+<script src="events.js?v=105"></script>
+<script src="walk.js?v=105"></script>
+<script src="pocket.js?v=105"></script>
+<script src="game.js?v=105"></script>
 </body>
 </html>

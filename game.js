@@ -633,7 +633,7 @@ function checkFound() {
     save.found[p.id] = { name: p.name, e: p.e, k: p.k, date: todayStr(), lat: p.lat, lng: p.lng, region: null };
     setTimeout(processRegions, 800);
     p.marker.getElement().innerHTML = poiHtml(p, true);
-    setTimeout(checkTitles, 3000); setTimeout(checkCityTiers, 3200); celebrate(ART.poi(p.k, 104), `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙 +1🔮'); addGold(20); addShard(1);
+    setTimeout(checkTitles, 3000); setTimeout(checkCityTiers, 3200); celebrate(ART.poi(p.k, 104), `${p.k}「${p.name}」を発見！`); toast(flavor(p) + '\nボーナス +20🪙 +1🔮'); addGold(20); if (typeof pocketFound === 'function') pocketFound(p.name); addShard(1);
   }
 }
 // ---- 天気(歩いた距離を雨の日・雪の日などで数える。画面にも雨・雪が降る) ----
@@ -820,6 +820,7 @@ function checkDaily() {
     if (d.claimed[m.id] || m.cur() < m.goal) continue;
     d.claimed[m.id] = true; claimed = true;
     addGold(m.gold); if (m.shards) addShard(m.shards); addXp(m.xp);
+    if (typeof gameFx === 'function') gameFx('mission');
     toast(`📋 デイリー達成「${m.name}」\n+${m.gold}🪙${m.shards ? ` +${m.shards}🔮` : ''}`);
   }
   if (!d.bonus && ms.every(m => d.claimed[m.id])) {
@@ -964,6 +965,7 @@ function updateLevel() {
     addGold(gold); addShard(shards); persist();
     setTimeout(() => {
       celebrate('🎖️', `レベルアップ！ Lv.${lv + 1} ${lvName(lv)}`);
+      if (typeof gameFx === 'function') gameFx('level');
       toast(`Lv.${lv + 1} ${lvName(lv)}\n報酬 +${gold}🪙 +${shards}🔮${opened.length ? '\n解放: ' + opened.join('・') : ''}`);
     }, lastLv === null ? 1800 : 0);
   }
@@ -1066,14 +1068,16 @@ function maintainCoins() {
 }
 function pickCoins(accuracy) {
   const range = (COIN_RANGE + Math.min(accuracy || 0, 30)) * (fxOn('magnet') ? 4 : 1);   // GPS誤差が大きいときはさらにゆるめる
+  let got = 0;
   for (const c of [...save.coins]) {
     if (dist(c, me) > range) continue;
     save.coins.splice(save.coins.indexOf(c), 1); removeCoinMarker(c.id);
-    if (c.k === 'shard') { addShard(1); addXp(10); continue; }
+    if (c.k === 'shard') { addShard(1); addXp(10); got++; continue; }
     const luck = Math.min(0.9, save.built.filter(o => ITEM[o.t].lucky && dist(o, c) <= 200).reduce((s, o) => s + 0.15 * lvOf(o), 0));
     if (fxOn('lucky') || Math.random() < luck) { floatText('🍀ご利益 2倍！'); addGold(c.v * 2); } else addGold(c.v);
-    D().coins += c.v; addXp(c.v);
+    D().coins += c.v; addXp(c.v); got++;
   }
+  if (got && typeof pocketCoin === 'function') pocketCoin(got);
 }
 function floatText(text) {
   const p = avatar ? map.project([avatar.lng, avatar.lat]) : { x: innerWidth / 2, y: innerHeight / 2 };
@@ -1368,7 +1372,7 @@ function setMode(m) {
     toast(`🗺️ 冒険モード\n地図をタップすると、👣を使ってそこへ歩いて行きます(10mで👣1)\n現実の場所へは、いつでも画面下のバーから戻れます`);
   } else if (realPos) { updatePosition(realPos.lat, realPos.lng, realPos.acc); snapCamera(); toast('現実の現在地にもどりました'); }
   else toast('現実の現在地を取得しています…');
-  updateRealGhost(); renderAdvPanel();
+  updateRealGhost(); renderAdvPanel(); if (typeof pocketUi === 'function') pocketUi();
 }
 function getFix(ok, fail) {                  // まず高精度(GPS)で、取れなければ低精度(Wi-Fi・基地局)で現在地を取る
   const g = navigator.geolocation;
@@ -1973,6 +1977,7 @@ function updatePosition(lat, lng, accuracy, virtual) {
       const el = Math.max((now - last.t) / 1000, 1), walking = save.speedLimit ? d / el <= MAX_SPEED : d <= Math.min(150000, 300 + el * 90);      // 速度制限は初期状態で解除(電車・車の移動も記録)。1回で150km以上飛ぶ位置は、データの飛びとして無視
       if (walking && !debug && !virtual) {
         if (save.day !== todayStr()) { save.day = todayStr(); save.today = 0; }
+        if (typeof pocketDist === 'function') pocketDist(d);
         save.today += d; save.total += d; save.ap += d * AP_PER_M * (fxOn('shoes') ? 2 : 1); addStats(d);
         save.trail.push([lat, lng]);
         if (save.trail.length > TRAIL_MAX) save.trail.splice(0, save.trail.length - TRAIL_MAX);
@@ -2083,6 +2088,7 @@ if (typeof onlineInit === 'function') onlineInit();
 if (typeof backupInit === 'function') backupInit();
 if (typeof eventsInit === 'function') eventsInit();
 if (typeof walkInit === 'function') walkInit();
+if (typeof pocketInit === 'function') pocketInit();
 document.querySelectorAll('[data-ico]').forEach(e => { e.innerHTML = ART.icon(e.dataset.ico, e.textContent); });      // 絵文字を、あれば絵に置きかえる
 if (!$('nav-mode-ic').firstElementChild) $('nav-mode-ic').innerHTML = ART.icon('foot', '🚶');
 function nearName(p) {

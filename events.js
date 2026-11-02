@@ -86,7 +86,7 @@ function evtTick() {                          // 位置が動くたびに呼ば�
   if (!got) return;
   save.evt = { id: ev.id, day: evtSt.day, mask }; persist();
   addGold(30 * got); addXp(20 * got);
-  celebrate(ART.chest(100), `宝箱を${got}つ開けた!`); toast(`🎁 宝箱を開けた! +${30 * got}🪙`);
+  celebrate(ART.chest(100), `宝箱を${got}つ開けた!`); if (typeof gameFx === 'function') gameFx('chest'); toast(`🎁 宝箱を開けた! +${30 * got}🪙`);
   evtSt.union |= mask; evtDrawChests(ev);
   evtCall('family_report', { p_event: ev.id, p_mask: mask }).then(() => evtRefresh()).catch(() => {});
 }
